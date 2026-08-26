@@ -14,15 +14,29 @@ criterion set), and extraction/risk-of-bias coverage is checked against
 the actual set of *included* studies, not just a total count that a
 study excluded earlier could accidentally satisfy.
 """
+from __future__ import annotations
+
 import argparse
 import json
 import os
 import sys
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from generate_flow_diagram import compute_counts, current_decision  # noqa: E402
+from generate_flow_diagram import Counts, Report, Study, compute_counts, current_decision  # noqa: E402
 
-CHECKLIST = [
+State = dict[str, Any]
+
+# The PRISMA statement is periodically revised (PRISMA 2009 -> PRISMA
+# 2020 was the last major one). CHECKLIST below encodes the 2020 item
+# list specifically — if a future revision changes the numbering or
+# item set, that's a new CHECKLIST_VERSION and a new CHECKLIST, not an
+# in-place edit that leaves old output ambiguous about which version it
+# was checked against.
+CHECKLIST_VERSION = "PRISMA 2020"
+CHECKLIST_SOURCE = "Page MJ, et al. The PRISMA 2020 statement. BMJ 2021;372:n71."
+
+CHECKLIST: list[tuple[int | str, str, str, str]] = [
     (1, "Title", "Identify the report as a systematic review", "manual"),
     (2, "Abstract", "Structured summary: objectives, methods, results, funding", "manual"),
     (3, "Introduction", "Rationale for the review", "manual"),
@@ -57,7 +71,7 @@ CHECKLIST = [
 ]
 
 
-def nonempty(v):
+def nonempty(v: object) -> bool:
     if v is None:
         return False
     if isinstance(v, (list, dict, str)):
@@ -65,11 +79,11 @@ def nonempty(v):
     return bool(v)
 
 
-def included_study_ids(reports, studies, counts):
+def included_study_ids(reports: dict[str, Report], studies: dict[str, Study], counts: Counts) -> set[str]:
     """The actual set of included study ids — including the auto 1:1
     assignment generate_flow_diagram.py would make for an included
     report that has no explicit study_id yet."""
-    ids = set()
+    ids: set[str] = set()
     for rid, rep in reports.items():
         if str(rep.get("dedup_status", "")).startswith("duplicate_of:"):
             continue
@@ -83,7 +97,10 @@ def included_study_ids(reports, studies, counts):
     return ids
 
 
-def evaluate(auto_check, state, counts, reports, studies, flow_diagram_paths):
+def evaluate(
+    auto_check: str, state: State, counts: Counts, reports: dict[str, Report],
+    studies: dict[str, Study], flow_diagram_paths: list[str],
+) -> tuple[bool | None, str]:
     protocol = state.get("protocol", {})
 
     if auto_check == "manual":
@@ -132,7 +149,7 @@ def evaluate(auto_check, state, counts, reports, studies, flow_diagram_paths):
     return None, "Unknown check type."
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("state_path", help="Path to prisma-state.json")
     parser.add_argument("--out", default="prisma-2020-checklist.md", help="Output markdown path")
@@ -148,7 +165,7 @@ def main():
     counts, _ = compute_counts(reports, studies)
     flow_diagram_paths = [f"{args.flow_diagram_base}.svg", f"{args.flow_diagram_base}.mmd"]
 
-    rows = []
+    rows: list[tuple[int | str, str, str, str, str]] = []
     satisfied = 0
     open_items = 0
     for num, section, item, auto_check in CHECKLIST:
@@ -167,6 +184,9 @@ def main():
     lines = [
         "# PRISMA 2020 checklist status",
         "",
+        f"Checked against: **{CHECKLIST_VERSION}** ({CHECKLIST_SOURCE}). If a later PRISMA revision changes "
+        "item numbering, results generated under a different version aren't comparable to this report.",
+        "",
         f"Auto-checked from `{args.state_path}`. {satisfied} item(s) verifiable from recorded data; "
         f"{open_items} item(s) still need the author's manuscript text or a judgment call — "
         "review those before submission.",
@@ -182,6 +202,7 @@ def main():
         f.write("\n".join(lines) + "\n")
 
     print(f"Wrote {args.out}  ({satisfied} addressed, {open_items} open)")
+    return 0
 
 
 if __name__ == "__main__":

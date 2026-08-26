@@ -22,14 +22,22 @@ its own single-report study — pass --update-state to persist that
 1:1 assignment into `studies`, or link multiple reports to one study
 first with link_study.py if you know they're the same underlying trial.
 """
+from __future__ import annotations
+
 import argparse
 import json
-import os
 import sys
+import textwrap
 from collections import Counter
+from typing import Any
+
+Report = dict[str, Any]
+Study = dict[str, Any]
+DecisionEvent = dict[str, Any]
+Counts = dict[str, Any]
 
 
-def classify_source(source):
+def classify_source(source: str | None) -> str:
     if source in ("clinicaltrials", "registry", "who-ictrp"):
         return "registers"
     if source == "manual":
@@ -37,18 +45,18 @@ def classify_source(source):
     return "databases"
 
 
-def current_decision(events):
+def current_decision(events: list[DecisionEvent]) -> DecisionEvent | None:
     """The log is append-only and chronological; the current decision is
     simply the last entry. `supersedes` is audit metadata, not a pointer
     the reader needs to follow — last-wins is unambiguous by construction."""
     return events[-1] if events else None
 
 
-def is_duplicate(report):
+def is_duplicate(report: Report) -> bool:
     return str(report.get("dedup_status", "")).startswith("duplicate_of:")
 
 
-def derive_stage(report):
+def derive_stage(report: Report) -> str:
     """The ONE place that maps a report's decision history to a stage.
     `report["stage"]` in the state file is a cache of this function's
     output — it is never hand-set or hand-advanced, specifically because
@@ -75,8 +83,8 @@ def derive_stage(report):
     return "included"
 
 
-def compute_counts(reports, studies):
-    counts = {
+def compute_counts(reports: dict[str, Report], studies: dict[str, Study]) -> tuple[Counts, dict[str, Study]]:
+    counts: Counts = {
         "identification": {"databases": 0, "registers": 0, "other_methods": 0, "duplicates_removed": 0},
         "screening": {"screened": 0, "excluded": 0, "exclusion_reasons": Counter()},
         "eligibility": {"sought": 0, "not_retrieved": 0, "assessed": 0, "excluded": 0, "exclusion_reasons": Counter()},
@@ -89,7 +97,7 @@ def compute_counts(reports, studies):
         if is_duplicate(rep):
             counts["identification"]["duplicates_removed"] += 1
 
-    included_report_ids = []
+    included_report_ids: list[str] = []
     for rid, rep in reports.items():
         if is_duplicate(rep):
             continue
@@ -102,6 +110,7 @@ def compute_counts(reports, studies):
         counts["screening"]["screened"] += 1
         if stage == "excluded":
             sd = current_decision(rep["screening_decisions"])
+            assert sd is not None, "derive_stage returned 'excluded' without a screening decision"
             counts["screening"]["excluded"] += 1
             counts["screening"]["exclusion_reasons"][sd.get("reason_category", "unspecified")] += 1
             continue
@@ -113,6 +122,7 @@ def compute_counts(reports, studies):
             counts["eligibility"]["not_retrieved"] += 1
         elif stage == "full_text_excluded":
             ed = current_decision(rep["eligibility_decisions"])
+            assert ed is not None, "derive_stage returned 'full_text_excluded' without an eligibility decision"
             counts["eligibility"]["assessed"] += 1
             counts["eligibility"]["excluded"] += 1
             counts["eligibility"]["exclusion_reasons"][ed.get("reason_category", "unspecified")] += 1
@@ -126,8 +136,8 @@ def compute_counts(reports, studies):
     # one was assigned (e.g. via link_study.py); otherwise it's treated
     # as its own single-report study. auto_studies records the 1:1
     # assignments the caller may want to persist with --update-state.
-    study_ids = set()
-    auto_studies = {}
+    study_ids: set[str] = set()
+    auto_studies: dict[str, Study] = {}
     for rid in included_report_ids:
         rep = reports[rid]
         sid = rep.get("study_id")
@@ -142,11 +152,26 @@ def compute_counts(reports, studies):
     return counts, auto_studies
 
 
-def reason_lines(reasons):
-    return [f"{label} (n={n})" for label, n in sorted(reasons.items(), key=lambda kv: -kv[1])]
+MAX_REASON_CATEGORIES_SHOWN = 6
 
 
-def render_mermaid(counts):
+def reason_lines(reasons: dict[str, int]) -> list[str]:
+    """A review can accumulate many distinct exclusion-reason categories
+    (a large multi-topic review easily has 15-30). Listing every one of
+    them as a separate line makes a box grow without bound and the
+    diagram illegible, so this shows the top categories by count and
+    rolls the rest into a single summary line — full detail is always
+    in the state file itself, the diagram is a visual summary of it."""
+    items = sorted(reasons.items(), key=lambda kv: -kv[1])
+    lines = [f"{label} (n={n})" for label, n in items[:MAX_REASON_CATEGORIES_SHOWN]]
+    rest = items[MAX_REASON_CATEGORIES_SHOWN:]
+    if rest:
+        rest_n = sum(n for _, n in rest)
+        lines.append(f"+{len(rest)} more categor{'y' if len(rest) == 1 else 'ies'} (n={rest_n}) — see prisma-state.json")
+    return lines
+
+
+def render_mermaid(counts: Counts) -> str:
     ident = counts["identification"]
     scr = counts["screening"]
     elig = counts["eligibility"]
@@ -154,7 +179,7 @@ def render_mermaid(counts):
 
     lines = ["flowchart TD"]
     lines.append('    subgraph ID["Identification"]')
-    ident_nodes = []
+    ident_nodes: list[str] = []
     if ident["databases"]:
         lines.append(f'        A1["Records identified from databases<br/>n={ident["databases"]}"]')
         ident_nodes.append("A1")
@@ -184,7 +209,24 @@ def render_mermaid(counts):
     return "\n".join(lines)
 
 
-def render_svg(counts):
+AVG_CHAR_WIDTH_PX = 6.5  # rough width of one character at font-size 13, Helvetica/Arial
+LINE_HEIGHT_PX = 16
+BOX_PADDING_PX = 16
+
+
+Box = tuple[float, float, float, float, list[tuple[str, bool]], list[str]]
+
+
+def wrap_to_width(text: str, box_width: float) -> list[str]:
+    """Word-wrap one label to fit inside a box of the given pixel width.
+    A box sized only for the raw string count (v0.1's approach) lets a
+    single long exclusion-reason sentence run outside its box — this
+    makes the box grow to actually fit its own text instead."""
+    max_chars = max(10, int((box_width - BOX_PADDING_PX) / AVG_CHAR_WIDTH_PX))
+    return textwrap.wrap(text, width=max_chars) or [""]
+
+
+def render_svg(counts: Counts) -> str:
     ident = counts["identification"]
     scr = counts["screening"]
     elig = counts["eligibility"]
@@ -192,88 +234,111 @@ def render_svg(counts):
 
     main_x, main_w = 40, 320
     side_x, side_w = 420, 340
-    y = 20
     gap = 30
-    boxes = []
-    arrows = []
+    # Two independent vertical frontiers: boxes in the same column must
+    # never overlap each other, but the two columns advance at different
+    # rates (a tall "excluded" box in the side column shouldn't push the
+    # next MAIN-column box down — only the next SIDE-column box).
+    frontier = {"main": 20.0, "side": 20.0}
+    boxes: list[Box] = []
+    arrows: list[tuple[Box, Box]] = []
 
-    def add_box(x, w, title, extra_lines=None, y_override=None):
-        nonlocal y
-        lines_list = [title] + (extra_lines or [])
-        h = 34 + 16 * (len(lines_list) - 1) + 16
-        by = y_override if y_override is not None else y
-        box = (x, by, w, h, lines_list)
+    def add_box(
+        column: str, x: float, w: float, title: str,
+        extra_lines: list[str] | None = None, align_with: Box | None = None,
+    ) -> Box:
+        """align_with: the main-column box this side box should start
+        level with, IF the side column's own frontier allows it — a side
+        box never starts above the row it logically belongs to, but if
+        an earlier, taller side box is still extending downward, this
+        one starts after it instead of overlapping it."""
+        raw_lines = [title] + (extra_lines or [])
+        wrapped: list[tuple[str, bool]] = []
+        for i, line in enumerate(raw_lines):
+            for wrapped_line in wrap_to_width(line, w):
+                wrapped.append((wrapped_line, i == 0))  # (text, is_title)
+        h = BOX_PADDING_PX + LINE_HEIGHT_PX + LINE_HEIGHT_PX * (len(wrapped) - 1) + BOX_PADDING_PX / 2
+
+        desired_y = frontier[column] if align_with is None else max(align_with[1], frontier["side"])
+        by = desired_y
+        box: Box = (x, by, w, h, wrapped, raw_lines)
         boxes.append(box)
-        if y_override is None:
-            y = by + h + gap
+        frontier[column] = by + h + gap
         return box
 
-    ident_lines = []
+    ident_lines: list[str] = []
     if ident["databases"]:
         ident_lines.append(f"Databases: n={ident['databases']}")
     if ident["registers"]:
         ident_lines.append(f"Registers: n={ident['registers']}")
     if ident["other_methods"]:
         ident_lines.append(f"Other methods: n={ident['other_methods']}")
-    b_ident = add_box(main_x, main_w, "Records identified", ident_lines)
+    b_ident = add_box("main", main_x, main_w, "Records identified", ident_lines)
 
-    b_dedup = add_box(main_x, main_w, "Duplicates removed", [f"n={ident['duplicates_removed']}"])
+    b_dedup = add_box("main", main_x, main_w, "Duplicates removed", [f"n={ident['duplicates_removed']}"])
     arrows.append((b_ident, b_dedup))
 
-    b_screened = add_box(main_x, main_w, "Records screened", [f"n={scr['screened']}"])
+    b_screened = add_box("main", main_x, main_w, "Records screened", [f"n={scr['screened']}"])
     arrows.append((b_dedup, b_screened))
 
-    b_excl_scr = add_box(side_x, side_w, "Records excluded",
+    b_excl_scr = add_box("side", side_x, side_w, "Records excluded",
                           [f"n={scr['excluded']}"] + reason_lines(scr["exclusion_reasons"]),
-                          y_override=b_screened[1])
+                          align_with=b_screened)
     arrows.append((b_screened, b_excl_scr))
 
-    b_sought = add_box(main_x, main_w, "Reports sought for retrieval", [f"n={elig['sought']}"])
+    b_sought = add_box("main", main_x, main_w, "Reports sought for retrieval", [f"n={elig['sought']}"])
     arrows.append((b_screened, b_sought))
 
-    b_nr = add_box(side_x, side_w, "Reports not retrieved", [f"n={elig['not_retrieved']}"],
-                    y_override=b_sought[1])
+    b_nr = add_box("side", side_x, side_w, "Reports not retrieved", [f"n={elig['not_retrieved']}"],
+                    align_with=b_sought)
     arrows.append((b_sought, b_nr))
 
-    b_assessed = add_box(main_x, main_w, "Reports assessed for eligibility", [f"n={elig['assessed']}"])
+    b_assessed = add_box("main", main_x, main_w, "Reports assessed for eligibility", [f"n={elig['assessed']}"])
     arrows.append((b_sought, b_assessed))
 
-    b_excl_elig = add_box(side_x, side_w, "Reports excluded",
+    b_excl_elig = add_box("side", side_x, side_w, "Reports excluded",
                            [f"n={elig['excluded']}"] + reason_lines(elig["exclusion_reasons"]),
-                           y_override=b_assessed[1])
+                           align_with=b_assessed)
     arrows.append((b_assessed, b_excl_elig))
 
-    b_included = add_box(main_x, main_w, "Studies included in review",
+    b_included = add_box("main", main_x, main_w, "Studies included in review",
                           [f"n={inc['studies']}", f"Reports of included studies: n={inc['reports']}"])
     arrows.append((b_assessed, b_included))
 
-    total_h = y + 20
+    total_h = max(frontier["main"], frontier["side"]) + 20
     total_w = side_x + side_w + 40
+    summary = (f"PRISMA 2020 flow diagram: {ident['databases'] + ident['registers'] + ident['other_methods']} "
+               f"records identified, {scr['excluded']} excluded at screening, {elig['excluded']} excluded at "
+               f"eligibility, {inc['studies']} studies included from {inc['reports']} reports.")
 
     svg_parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {total_w} {total_h}" '
-        f'font-family="Helvetica, Arial, sans-serif" font-size="13">',
+        f'font-family="Helvetica, Arial, sans-serif" font-size="13" role="img" '
+        f'aria-label="{escape_xml(summary)}">',
+        f"<title>{escape_xml(summary)}</title>",
         '<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" '
         'orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#333"/></marker></defs>',
         f'<rect x="0" y="0" width="{total_w}" height="{total_h}" fill="white"/>',
     ]
 
-    for (x, by, w, h, lines_list) in boxes:
+    for (x, by, w, h, wrapped, raw_lines) in boxes:
+        box_label = " — ".join(raw_lines)
         svg_parts.append(
+            f'<g><title>{escape_xml(box_label)}</title>'
             f'<rect x="{x}" y="{by}" width="{w}" height="{h}" rx="6" '
-            f'fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>'
+            f'fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>'
         )
-        for i, line in enumerate(lines_list):
-            weight = "bold" if i == 0 else "normal"
-            ty = by + 22 + i * 16
+        for i, (text, is_title) in enumerate(wrapped):
+            weight = "bold" if is_title else "normal"
+            ty = by + 22 + i * LINE_HEIGHT_PX
             svg_parts.append(
                 f'<text x="{x + w / 2}" y="{ty}" text-anchor="middle" '
-                f'font-weight="{weight}">{escape_xml(line)}</text>'
+                f'font-weight="{weight}">{escape_xml(text)}</text>'
             )
 
     for (src, dst) in arrows:
-        sx, sy, sw, sh, _ = src
-        dx, dy, dw, dh, _ = dst
+        sx, sy, sw, sh = src[:4]
+        dx, dy, dw, dh = dst[:4]
         if dx == sx:
             x1, y1 = sx + sw / 2, sy + sh
             x2, y2 = dx + dw / 2, dy
@@ -287,11 +352,11 @@ def render_svg(counts):
     return "\n".join(svg_parts)
 
 
-def escape_xml(text):
+def escape_xml(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("state_path", help="Path to prisma-state.json")
     parser.add_argument("--out", default="flow-diagram", help="Output basename (default: flow-diagram)")
@@ -341,6 +406,8 @@ def main():
         with open(args.state_path, "w") as f:
             json.dump(state, f, indent=2)
         print(f"\nUpdated state written back to {args.state_path}")
+
+    return 0
 
 
 if __name__ == "__main__":

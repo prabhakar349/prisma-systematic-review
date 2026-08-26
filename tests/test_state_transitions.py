@@ -2,7 +2,7 @@ import unittest
 
 import _paths  # noqa: F401
 from generate_flow_diagram import derive_stage
-from validate_state import check_stage_consistency, ValidationError
+from validate_state import ValidationError, check_stage_consistency
 
 
 def event(decision, full_text_retrieved=None, reason_category=None, reason=None):

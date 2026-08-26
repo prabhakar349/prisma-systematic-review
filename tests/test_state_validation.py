@@ -1,7 +1,7 @@
 import unittest
 
 import _paths  # noqa: F401
-from validate_state import validate, validate_fallback, ValidationError
+from validate_state import ValidationError, validate, validate_fallback
 
 
 def valid_state():

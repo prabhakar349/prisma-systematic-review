@@ -1,43 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 648" font-family="Helvetica, Arial, sans-serif" font-size="13">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 588.0" font-family="Helvetica, Arial, sans-serif" font-size="13" role="img" aria-label="PRISMA 2020 flow diagram: 4 records identified, 2 excluded at screening, 0 excluded at eligibility, 1 studies included from 1 reports.">
+<title>PRISMA 2020 flow diagram: 4 records identified, 2 excluded at screening, 0 excluded at eligibility, 1 studies included from 1 reports.</title>
 <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#333"/></marker></defs>
-<rect x="0" y="0" width="800" height="648" fill="white"/>
-<rect x="40" y="20" width="320" height="82" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
-<text x="200.0" y="42" text-anchor="middle" font-weight="bold">Records identified</text>
-<text x="200.0" y="58" text-anchor="middle" font-weight="normal">Databases: n=3</text>
-<text x="200.0" y="74" text-anchor="middle" font-weight="normal">Registers: n=1</text>
-<rect x="40" y="132" width="320" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
-<text x="200.0" y="154" text-anchor="middle" font-weight="bold">Duplicates removed</text>
-<text x="200.0" y="170" text-anchor="middle" font-weight="normal">n=1</text>
-<rect x="40" y="228" width="320" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
-<text x="200.0" y="250" text-anchor="middle" font-weight="bold">Records screened</text>
-<text x="200.0" y="266" text-anchor="middle" font-weight="normal">n=3</text>
-<rect x="420" y="228" width="340" height="98" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
-<text x="590.0" y="250" text-anchor="middle" font-weight="bold">Records excluded</text>
-<text x="590.0" y="266" text-anchor="middle" font-weight="normal">n=2</text>
-<text x="590.0" y="282" text-anchor="middle" font-weight="normal">wrong population (n=1)</text>
-<text x="590.0" y="298" text-anchor="middle" font-weight="normal">wrong study design (n=1)</text>
-<rect x="40" y="324" width="320" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
-<text x="200.0" y="346" text-anchor="middle" font-weight="bold">Reports sought for retrieval</text>
-<text x="200.0" y="362" text-anchor="middle" font-weight="normal">n=1</text>
-<rect x="420" y="324" width="340" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
-<text x="590.0" y="346" text-anchor="middle" font-weight="bold">Reports not retrieved</text>
-<text x="590.0" y="362" text-anchor="middle" font-weight="normal">n=0</text>
-<rect x="40" y="420" width="320" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
-<text x="200.0" y="442" text-anchor="middle" font-weight="bold">Reports assessed for eligibility</text>
-<text x="200.0" y="458" text-anchor="middle" font-weight="normal">n=1</text>
-<rect x="420" y="420" width="340" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
-<text x="590.0" y="442" text-anchor="middle" font-weight="bold">Reports excluded</text>
-<text x="590.0" y="458" text-anchor="middle" font-weight="normal">n=0</text>
-<rect x="40" y="516" width="320" height="82" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
-<text x="200.0" y="538" text-anchor="middle" font-weight="bold">Studies included in review</text>
-<text x="200.0" y="554" text-anchor="middle" font-weight="normal">n=1</text>
-<text x="200.0" y="570" text-anchor="middle" font-weight="normal">Reports of included studies: n=1</text>
-<line x1="200.0" y1="102" x2="200.0" y2="132" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
-<line x1="200.0" y1="198" x2="200.0" y2="228" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
-<line x1="360" y1="261.0" x2="420" y2="277.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
-<line x1="200.0" y1="294" x2="200.0" y2="324" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
-<line x1="360" y1="357.0" x2="420" y2="357.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
-<line x1="200.0" y1="390" x2="200.0" y2="420" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
-<line x1="360" y1="453.0" x2="420" y2="453.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
-<line x1="200.0" y1="486" x2="200.0" y2="516" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<rect x="0" y="0" width="800" height="588.0" fill="white"/>
+<g><title>Records identified — Databases: n=3 — Registers: n=1</title><rect x="40" y="20.0" width="320" height="72.0" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>
+<text x="200.0" y="42.0" text-anchor="middle" font-weight="bold">Records identified</text>
+<text x="200.0" y="58.0" text-anchor="middle" font-weight="normal">Databases: n=3</text>
+<text x="200.0" y="74.0" text-anchor="middle" font-weight="normal">Registers: n=1</text>
+<g><title>Duplicates removed — n=1</title><rect x="40" y="122.0" width="320" height="56.0" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>
+<text x="200.0" y="144.0" text-anchor="middle" font-weight="bold">Duplicates removed</text>
+<text x="200.0" y="160.0" text-anchor="middle" font-weight="normal">n=1</text>
+<g><title>Records screened — n=3</title><rect x="40" y="208.0" width="320" height="56.0" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>
+<text x="200.0" y="230.0" text-anchor="middle" font-weight="bold">Records screened</text>
+<text x="200.0" y="246.0" text-anchor="middle" font-weight="normal">n=3</text>
+<g><title>Records excluded — n=2 — wrong population (n=1) — wrong study design (n=1)</title><rect x="420" y="208.0" width="340" height="88.0" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>
+<text x="590.0" y="230.0" text-anchor="middle" font-weight="bold">Records excluded</text>
+<text x="590.0" y="246.0" text-anchor="middle" font-weight="normal">n=2</text>
+<text x="590.0" y="262.0" text-anchor="middle" font-weight="normal">wrong population (n=1)</text>
+<text x="590.0" y="278.0" text-anchor="middle" font-weight="normal">wrong study design (n=1)</text>
+<g><title>Reports sought for retrieval — n=1</title><rect x="40" y="294.0" width="320" height="56.0" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>
+<text x="200.0" y="316.0" text-anchor="middle" font-weight="bold">Reports sought for retrieval</text>
+<text x="200.0" y="332.0" text-anchor="middle" font-weight="normal">n=1</text>
+<g><title>Reports not retrieved — n=0</title><rect x="420" y="326.0" width="340" height="56.0" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>
+<text x="590.0" y="348.0" text-anchor="middle" font-weight="bold">Reports not retrieved</text>
+<text x="590.0" y="364.0" text-anchor="middle" font-weight="normal">n=0</text>
+<g><title>Reports assessed for eligibility — n=1</title><rect x="40" y="380.0" width="320" height="56.0" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>
+<text x="200.0" y="402.0" text-anchor="middle" font-weight="bold">Reports assessed for eligibility</text>
+<text x="200.0" y="418.0" text-anchor="middle" font-weight="normal">n=1</text>
+<g><title>Reports excluded — n=0</title><rect x="420" y="412.0" width="340" height="56.0" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>
+<text x="590.0" y="434.0" text-anchor="middle" font-weight="bold">Reports excluded</text>
+<text x="590.0" y="450.0" text-anchor="middle" font-weight="normal">n=0</text>
+<g><title>Studies included in review — n=1 — Reports of included studies: n=1</title><rect x="40" y="466.0" width="320" height="72.0" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/></g>
+<text x="200.0" y="488.0" text-anchor="middle" font-weight="bold">Studies included in review</text>
+<text x="200.0" y="504.0" text-anchor="middle" font-weight="normal">n=1</text>
+<text x="200.0" y="520.0" text-anchor="middle" font-weight="normal">Reports of included studies: n=1</text>
+<line x1="200.0" y1="92.0" x2="200.0" y2="122.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="200.0" y1="178.0" x2="200.0" y2="208.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="360" y1="236.0" x2="420" y2="252.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="200.0" y1="264.0" x2="200.0" y2="294.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="360" y1="322.0" x2="420" y2="354.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="200.0" y1="350.0" x2="200.0" y2="380.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="360" y1="408.0" x2="420" y2="440.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="200.0" y1="436.0" x2="200.0" y2="466.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
 </svg>

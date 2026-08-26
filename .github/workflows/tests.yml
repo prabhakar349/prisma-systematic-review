@@ -31,4 +31,22 @@ jobs:
           python3 "$GITHUB_WORKSPACE/skills/prisma-systematic-review/scripts/generate_flow_diagram.py" prisma-state.json --out flow-diagram
           python3 "$GITHUB_WORKSPACE/skills/prisma-systematic-review/scripts/generate_checklist.py" prisma-state.json --out prisma-2020-checklist.md
           diff flow-diagram.mmd "$GITHUB_WORKSPACE/fixtures/example-review/flow-diagram.mmd"
+          diff flow-diagram.svg "$GITHUB_WORKSPACE/fixtures/example-review/flow-diagram.svg"
           diff prisma-2020-checklist.md "$GITHUB_WORKSPACE/fixtures/example-review/prisma-2020-checklist.md"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements-dev.txt
+      - name: ruff
+        run: ruff check .
+      - name: mypy (with jsonschema present)
+        run: mypy skills/prisma-systematic-review/scripts
+      - name: mypy (without jsonschema, matches the other CI leg)
+        run: |
+          pip uninstall -y jsonschema
+          mypy skills/prisma-systematic-review/scripts

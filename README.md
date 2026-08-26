@@ -75,5 +75,18 @@ skills/prisma-systematic-review/
   scripts/validate_state.py
 agents/prisma-abstract-screener.md
 fixtures/example-review/
-tests/                                — run with: cd tests && python3 -m unittest discover
+tests/                                — unit + integration tests, see below
 ```
+
+## Development
+
+The scripts have zero runtime dependencies (`jsonschema` is optional — `validate_state.py` falls back to a dependency-free check without it). Dev tooling is separate:
+
+```bash
+pip install -r requirements-dev.txt
+cd tests && python3 -m unittest discover -v   # unit tests (dedup, counts, checklist, state transitions) + integration tests (real CLI subprocess runs, including link_study.py)
+ruff check .                                   # lint
+mypy skills/prisma-systematic-review/scripts   # type check
+```
+
+CI runs all of this on every push, plus a regenerate-and-diff check against `fixtures/example-review/` so that fixture never silently drifts from what the scripts actually produce.

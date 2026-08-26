@@ -88,7 +88,6 @@ class TestDedupe(unittest.TestCase):
             "b": {**report("Study (conf. abstract)", 2020, doi="10.1/shared"), "identifiers": {"doi": "10.1/shared", "pmid": "PM123"}},
             "c": report("Study (registry mirror)", 2020, doi=None, pmid="PM123"),
         })
-        canonical = {reports[rid]["dedup_status"] for rid in ("a", "b", "c")}
         # exactly one of them is "unique" (the canonical root); the other two point at it
         uniques = [rid for rid in ("a", "b", "c") if reports[rid]["dedup_status"] == "unique"]
         self.assertEqual(len(uniques), 1)

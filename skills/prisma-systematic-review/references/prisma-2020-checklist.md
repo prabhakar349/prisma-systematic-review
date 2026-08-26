@@ -1,5 +1,7 @@
 # PRISMA 2020 checklist — item map
 
+**Version: PRISMA 2020.** Source: Page MJ, et al. The PRISMA 2020 statement: an updated guideline for reporting systematic reviews. *BMJ* 2021;372:n71. The item list and numbering below track that revision specifically — PRISMA has been revised before (2009 → 2020) and may be again; if it is, this file and the `CHECKLIST` constant in `scripts/generate_checklist.py` need a matching update (bump `CHECKLIST_VERSION` in that script too), not a silent in-place edit, since a report generated under one version isn't meaningfully comparable to one generated under another.
+
 The 27-item PRISMA 2020 checklist, organized by manuscript section. `scripts/generate_checklist.py` uses the `auto_check` field to decide what it can verify directly from `prisma-state.json`; everything else it flags as needing the author's own manuscript text, since a checklist item being "satisfied" often means a sentence exists in the paper, not a field in a JSON file.
 
 | # | Section | Item | auto_check |

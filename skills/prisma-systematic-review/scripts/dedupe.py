@@ -18,21 +18,29 @@ deliberately conservative: a wrongly-merged report silently drops a real
 study from the review, which is a worse failure than one extra row a
 human has to glance at.
 """
+from __future__ import annotations
+
 import argparse
 import json
 import re
 import sys
 from difflib import SequenceMatcher
 from itertools import combinations
+from typing import Any, Callable
+
+Report = dict[str, Any]
+State = dict[str, Any]
+MergeLogEntry = dict[str, Any]
+NearMiss = dict[str, Any]
 
 
-def normalize_title(title):
+def normalize_title(title: str | None) -> str:
     title = (title or "").lower()
     title = re.sub(r"[^a-z0-9\s]", "", title)
     return re.sub(r"\s+", " ", title).strip()
 
 
-def normalize_doi(doi):
+def normalize_doi(doi: str | None) -> str | None:
     if not doi:
         return None
     doi = doi.strip().lower()
@@ -40,29 +48,29 @@ def normalize_doi(doi):
     return doi or None
 
 
-def normalize_id(value):
+def normalize_id(value: object) -> str | None:
     if not value:
         return None
     return str(value).strip().lower() or None
 
 
-def first_author(authors):
+def first_author(authors: list[str] | None) -> str | None:
     if not authors:
         return None
     return re.sub(r"[^a-z]", "", authors[0].lower())
 
 
 class UnionFind:
-    def __init__(self, ids):
-        self.parent = {i: i for i in ids}
+    def __init__(self, ids: list[str]) -> None:
+        self.parent: dict[str, str] = {i: i for i in ids}
 
-    def find(self, x):
+    def find(self, x: str) -> str:
         while self.parent[x] != x:
             self.parent[x] = self.parent[self.parent[x]]
             x = self.parent[x]
         return x
 
-    def union(self, a, b):
+    def union(self, a: str, b: str) -> None:
         ra, rb = self.find(a), self.find(b)
         if ra == rb:
             return
@@ -73,11 +81,11 @@ class UnionFind:
             self.parent[ra] = rb
 
 
-def group_and_union(uf, keyed_ids):
+def group_and_union(uf: UnionFind, keyed_ids: dict[str, list[str]]) -> list[tuple[str, list[str]]]:
     """keyed_ids: dict of normalized-key -> [report_ids]. Unions every
     id sharing a key. Returns the list of keys that had >1 id, for
     reporting which identifier drove each merge."""
-    merged_via = []
+    merged_via: list[tuple[str, list[str]]] = []
     for key, ids in keyed_ids.items():
         if key and len(ids) > 1:
             for other in ids[1:]:
@@ -86,14 +94,16 @@ def group_and_union(uf, keyed_ids):
     return merged_via
 
 
-def dedupe(state, near_miss_threshold, confirmed_pairs):
-    reports = state.get("reports", {})
+def dedupe(
+    state: State, near_miss_threshold: float, confirmed_pairs: list[tuple[str, str]]
+) -> tuple[State, int, list[MergeLogEntry], list[NearMiss]]:
+    reports: dict[str, Report] = state.get("reports", {})
     ids = list(reports.keys())
     uf = UnionFind(ids)
-    merge_log = []
+    merge_log: list[MergeLogEntry] = []
 
-    def index_by(fn):
-        buckets = {}
+    def index_by(fn: Callable[[Report], str | None]) -> dict[str, list[str]]:
+        buckets: dict[str, list[str]] = {}
         for rid in ids:
             key = fn(reports[rid])
             if key:
@@ -129,7 +139,7 @@ def dedupe(state, near_miss_threshold, confirmed_pairs):
     # Fuzzy title+year candidates — reporting only, never auto-merged.
     # Restricted to reports not already clustered together, so a
     # confirmed DOI match doesn't also show up as a "near miss".
-    near_misses = []
+    near_misses: list[NearMiss] = []
     titles = {rid: normalize_title(reports[rid].get("title")) for rid in ids}
     years = {rid: reports[rid].get("year") for rid in ids}
     for a, b in combinations(ids, 2):
@@ -153,7 +163,7 @@ def dedupe(state, near_miss_threshold, confirmed_pairs):
     return state, duplicates_removed, merge_log, near_misses
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("state_path", help="Path to prisma-state.json")
     parser.add_argument("--out", help="Output path (default: overwrite state_path)")
@@ -196,6 +206,8 @@ def main():
         with open(out_path, "w") as f:
             json.dump(state, f, indent=2)
         print(f"\nWrote updated state to {out_path}")
+
+    return 0
 
 
 if __name__ == "__main__":

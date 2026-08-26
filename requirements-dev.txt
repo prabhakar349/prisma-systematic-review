@@ -1,0 +1,7 @@
+# Dev-only tools — nothing in skills/ or agents/ depends on these at
+# runtime. jsonschema is optional too: validate_state.py works without
+# it (see the fallback validator), but installing it gets you the full
+# JSON Schema check instead.
+ruff
+mypy
+jsonschema

@@ -1,5 +1,7 @@
 # PRISMA 2020 checklist status
 
+Checked against: **PRISMA 2020** (Page MJ, et al. The PRISMA 2020 statement. BMJ 2021;372:n71.). If a later PRISMA revision changes item numbering, results generated under a different version aren't comparable to this report.
+
 Auto-checked from `prisma-state.json`. 8 item(s) verifiable from recorded data; 23 item(s) still need the author's manuscript text or a judgment call — review those before submission.
 
 | # | Section | Item | Status | Note |

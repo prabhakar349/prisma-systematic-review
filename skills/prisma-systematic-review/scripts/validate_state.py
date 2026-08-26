@@ -23,13 +23,19 @@ which is exactly the failure mode `stage` is prone to if anything ever
 hand-sets or hand-advances it instead of leaving it to
 generate_flow_diagram.py --update-state.
 """
+from __future__ import annotations
+
 import argparse
 import json
 import os
 import sys
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from generate_flow_diagram import derive_stage  # noqa: E402
+from generate_flow_diagram import Report, derive_stage  # noqa: E402
+
+State = dict[str, Any]
+DecisionEvent = dict[str, Any]
 
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "references", "state-schema.json")
 
@@ -42,8 +48,8 @@ class ValidationError(Exception):
     pass
 
 
-def validate_with_jsonschema(state, schema):
-    import jsonschema  # type: ignore
+def validate_with_jsonschema(state: State, schema: dict[str, Any]) -> None:
+    import jsonschema  # ignore_missing_imports in pyproject.toml covers this either way
     validator = jsonschema.Draft7Validator(schema)
     errors = sorted(validator.iter_errors(state), key=lambda e: list(e.path))
     if errors:
@@ -51,10 +57,10 @@ def validate_with_jsonschema(state, schema):
         raise ValidationError("\n".join(messages))
 
 
-def validate_fallback(state):
+def validate_fallback(state: State) -> None:
     """Dependency-free structural check. Not a full JSON Schema implementation —
     covers the mistakes that actually corrupt downstream calculations."""
-    errors = []
+    errors: list[str] = []
 
     for key in ("protocol", "search_runs", "reports", "studies"):
         if key not in state:
@@ -87,8 +93,8 @@ def validate_fallback(state):
         raise ValidationError("\n".join(errors))
 
 
-def _check_decision_event(path, event):
-    errors = []
+def _check_decision_event(path: str, event: DecisionEvent) -> list[str]:
+    errors: list[str] = []
     decision = event.get("decision")
     if decision not in DECISION_ENUM:
         errors.append(f"{path}.decision: '{decision}' is not one of {sorted(DECISION_ENUM)}")
@@ -104,12 +110,13 @@ def _check_decision_event(path, event):
     return errors
 
 
-def check_stage_consistency(state):
+def check_stage_consistency(state: State) -> None:
     """Cross-field check no JSON Schema can express: a report's stored
     `stage` must equal what its decision history implies. Skips reports
     that have no `stage` at all — that's a structural error the schema
     check already caught, not a drift error."""
-    errors = []
+    errors: list[str] = []
+    report: Report
     for report_id, report in state.get("reports", {}).items():
         stored = report.get("stage")
         if stored is None:
@@ -125,7 +132,7 @@ def check_stage_consistency(state):
         raise ValidationError("\n".join(errors))
 
 
-def validate(state):
+def validate(state: State) -> None:
     """Raises ValidationError on failure. Returns None on success."""
     try:
         with open(SCHEMA_PATH) as f:
@@ -147,7 +154,7 @@ def validate(state):
     check_stage_consistency(state)
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("state_path", help="Path to prisma-state.json")
     args = parser.parse_args()

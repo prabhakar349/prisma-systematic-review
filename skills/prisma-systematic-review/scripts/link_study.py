@@ -14,17 +14,25 @@ If any of the given reports already belong to a study, that study's
 other reports come along for the ride — linking is transitive, the same
 way dedupe's union-find is.
 """
+from __future__ import annotations
+
 import argparse
 import json
+import os
 import sys
+from typing import Any
 
-sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from validate_state import validate, ValidationError  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from validate_state import ValidationError, validate  # noqa: E402
+
+State = dict[str, Any]
 
 
-def link(state, report_ids, primary_report=None, study_id=None):
-    reports = state.setdefault("reports", {})
-    studies = state.setdefault("studies", {})
+def link(
+    state: State, report_ids: list[str], primary_report: str | None = None, study_id: str | None = None
+) -> tuple[State, str]:
+    reports: dict[str, Any] = state.setdefault("reports", {})
+    studies: dict[str, Any] = state.setdefault("studies", {})
 
     missing = [rid for rid in report_ids if rid not in reports]
     if missing:
@@ -48,7 +56,7 @@ def link(state, report_ids, primary_report=None, study_id=None):
     return state, new_study_id
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("state_path", help="Path to prisma-state.json")
     parser.add_argument("--reports", nargs="+", required=True, help="Report IDs to link as one study (2 or more)")
@@ -73,6 +81,7 @@ def main():
         json.dump(state, f, indent=2)
 
     print(f"Linked {args.reports} as study '{study_id}'")
+    return 0
 
 
 if __name__ == "__main__":
