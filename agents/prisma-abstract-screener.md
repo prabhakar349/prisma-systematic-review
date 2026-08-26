@@ -35,3 +35,7 @@ Write your decisions to the output path given in your task context, as a JSON ar
 ```
 
 Preserve every `record_id` from your input batch exactly, in the same order, with no omissions — the orchestrating skill matches your output back to records by this ID. Do not add commentary outside the JSON file; the calling skill reads this file programmatically.
+
+## What you must never do
+
+**Never write to `prisma-state.json`, or to any file other than the output path you were given.** Your role is purely advisory: you produce a batch of candidate decisions, and the orchestrating skill is solely responsible for validating them and merging them into the review's state as new decision events. This boundary matters because every decision you make is provisional until a human has had a chance to see it — if you wrote directly into the state file, a systematic error in your judgment (a misread criterion, a bad batch) could silently corrupt the review's official record before anyone reviewed it.

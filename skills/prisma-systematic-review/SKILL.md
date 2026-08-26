@@ -9,9 +9,14 @@ PRISMA 2020 is the reporting standard for systematic reviews and meta-analyses: 
 
 ## Why a state file, and why git
 
-Systematic reviews are judged on reproducibility: a reader (or a peer reviewer) needs to see *why* a given study was excluded, not just that it was. Keep the entire review — protocol, every record, every decision and its stated reason — in one JSON file, `prisma-state.json`, in the user's project directory. If that directory is a git repo, each meaningful update (criteria finalized, a screening batch completed, eligibility decisions made) deserves its own commit — the diff *is* the audit trail. Never silently overwrite a decision; if a reviewer changes their mind about a record, record the change, don't erase the prior state.
+Systematic reviews are judged on reproducibility: a reader (or a peer reviewer) needs to see *why* a given study was excluded, not just that it was. Keep the entire review — protocol, every report, every decision and its stated reason — in one JSON file, `prisma-state.json`, in the user's project directory. If that directory is a git repo, each meaningful update (criteria finalized, a screening batch completed, eligibility decisions made) deserves its own commit — the diff *is* the audit trail.
 
-See `references/state-schema.md` for the exact shape of `prisma-state.json`. Read an existing one before writing to it — most steps below are incremental updates, not fresh writes.
+Two things are non-negotiable about how this file gets mutated, because they're what make the audit trail actually trustworthy rather than just plausible-looking:
+
+- **Decisions are events, never overwritten fields.** `screening_decisions` and `eligibility_decisions` are append-only lists. If a reviewer changes their mind, append a new decision — don't edit the old one. The current decision is always the *last* entry (see `references/state-schema.md`).
+- **Validate before you write.** Run `scripts/validate_state.py prisma-state.json` after merging any batch of changes — especially agent-produced screening output — before treating the file as good. A typo'd decision value should fail loudly here, not silently corrupt a count three steps later.
+
+See `references/state-schema.md` for the full schema, including why `reports` and `studies` are separate concepts (short version: one study can have several reports — a registry entry, a conference abstract, a journal article — and conflating them overcounts "studies included"). Read the existing state file before writing to it — most steps below are incremental updates, not fresh writes.
 
 ## The workflow
 
@@ -22,44 +27,50 @@ Work through these phases in order, but treat this as resumable — a real revie
 Do not invent eligibility criteria — they encode a domain judgment call only the researcher can make. Elicit, in plain conversation:
 
 - **Research question**, framed as PICO (Population, Intervention, Comparator, Outcome) for intervention questions, or PECO (Exposure instead of Intervention) for etiology/risk questions — ask which fits, don't assume.
-- **Inclusion and exclusion criteria** — study designs, populations, date range, language, publication status (peer-reviewed only, or preprints too).
-- **Sources to search** — check which literature MCP tools are actually connected (PubMed, bioRxiv, Consensus, ClinicalTrials.gov are common) and ask about any the user needs that aren't (hand searches, grey literature, citation chasing) — those get recorded as manual counts later, since no tool call can produce them.
+- **Inclusion and exclusion criteria** — study designs, populations, date range, language, publication status (peer-reviewed only, or preprints too). Both lists need at least one entry each; a criteria set with only inclusions (or only exclusions) isn't usable and `generate_checklist.py` will flag it as incomplete.
+- **Sources to search** — check which literature MCP tools are actually connected (PubMed, bioRxiv, Consensus, ClinicalTrials.gov are common) and ask about any the user needs that aren't (hand searches, grey literature, citation chasing) — those become manual `search_runs` entries later, since no tool call can produce them.
 
-Write this into `prisma-state.json` under `protocol`. Show the user the criteria back in plain language and get explicit confirmation before searching — criteria drive every downstream exclusion, so a mistake here invalidates everything after it.
+Write this into `prisma-state.json` under `protocol` with `version: 1` and `status: "draft"`. Show the user the criteria back in plain language and get explicit confirmation — only then set `status: "confirmed"` and stamp `confirmed_at`. Criteria drive every downstream exclusion, so a mistake here invalidates everything after it.
+
+**If criteria change mid-review** (the user tightens a population definition, adds an exclusion, etc.), don't edit `protocol` in place — increment `version`, re-confirm, and keep going. Every decision event already carries the `protocol_version` active when it was made, so later you can tell which exclusions happened under which criteria. Flag to the user that records screened under the old version may be worth revisiting, but don't auto-revisit them without asking — that could be a lot of re-work they may not want.
 
 ### 2. Search execution (Identification)
 
-Run the search strategy across each confirmed source using its MCP tool, using the same query logic per source (adapt syntax to each API, keep the underlying concept identical). For each source, record in `protocol.search_strategy` the exact query used — PRISMA item #7 requires this be reproducible by someone else. As results come back, append each record to `records` in the state file with `source`, `source_id`, `title`, `authors`, `year`, `doi`, `abstract`, and `stage: "identified"`.
+For each confirmed source, run the search and record a `search_runs` entry first — `source`, `query` (the exact string used; PRISMA item #7 requires this be reproducible by someone else), `searched_at`, and `result_count`. As results come back, append each one to `reports` with `source`, `source_id`, `identifiers` (DOI/PMID/PMCID/NCT as available), `title`, `authors`, `year`, `abstract`, `search_run_id` pointing back at the run, and `stage: "identified"`.
 
-Ask the user for counts from any non-tool-accessible sources (register searches, citation searching, hand-searching reference lists) and add them directly to `counts.identification.other_methods` — don't fabricate a search you didn't run.
+For non-tool-accessible sources (register browsing, citation searching, hand-searching reference lists), still create a `search_runs` entry (`source: "manual"`, a `method` string, and the count the user gives you) rather than a tool-driven one — don't fabricate a search you didn't run, but do record that it happened.
 
 ### 3. Deduplication
 
-Run `scripts/dedupe.py` against the state file. It matches on exact DOI first, then falls back to fuzzy title+year matching for records missing a DOI (common with preprints and older records). Read the reported near-miss pairs it's unsure about — flag anything below its confidence threshold for the user to confirm rather than silently merging. Update `counts.identification.duplicates_removed` from the script's output.
+Run `scripts/dedupe.py` against the state file. It auto-merges only on exact-identifier agreement (DOI, PMID, PMCID, registry ID, or an exact title+first-author+year match) — same title and year alone is *not* enough evidence two reports are the same (a follow-up publication or subgroup analysis can share both). Fuzzy title similarity below that bar is reported as a candidate pair, never auto-merged; if the user confirms a pair is really the same report, write it to a small JSON file of `[id_a, id_b]` pairs and re-run with `--confirm-pairs`.
+
+Don't confuse this with study-linking (step 6a) — dedupe removes literal duplicate *entries* of one report; it doesn't decide whether two distinct reports describe the same study.
 
 ### 4. Title/abstract screening
 
-This is the highest-volume step and the one worth delegating. For batches larger than ~20 records, dispatch the **`prisma-abstract-screener`** agent (see `agents/prisma-abstract-screener.md`) in parallel chunks of 20-40 records each, passing it the eligibility criteria and each record's title+abstract. It returns `include` / `exclude` / `maybe` with a one-sentence rationale citing which criterion drove the call — never a bare verdict. For small batches, or when the user wants to screen personally, do it inline instead.
+This is the highest-volume step and the one worth delegating. For batches larger than ~20 reports, dispatch the **`prisma-abstract-screener`** agent (see `agents/prisma-abstract-screener.md`) in parallel chunks of 20-40, passing it the eligibility criteria, a fixed list of `reason_category` labels to choose from, and each report's title+abstract. It writes its decisions to its own output file — **never to `prisma-state.json` directly** — and you (the orchestrator) are the only one who applies them. Treat the agent purely as an advisory computation: read its output, validate it looks sane, then append each decision as a new event to the corresponding report's `screening_decisions`, with `reviewer: "agent"`, a `timestamp`, and the current `protocol_version`. For small batches, or when the user wants to screen personally, do it inline instead, with `reviewer: "human:<name>"`.
 
-Treat every agent decision as provisional, not final: this accelerates a human reviewer, it doesn't replace one. Surface `maybe` calls and a sample of `exclude` calls (PRISMA and Cochrane guidance both expect some human verification of automated/single-reviewer screening) back to the user before locking them in. Write each decision to the record's `screening_decision` with `reviewer` set to `"agent"` or `"human:<name>"` so the provenance stays visible. Give the screener agent a short, fixed list of `reason_category` labels drawn from the exclusion criteria (e.g. `"wrong population"`, `"wrong study design"`) — PRISMA item #16b wants exclusion reasons reported as grouped counts, not a per-record wall of text, and that only works if categories stay consistent across the whole batch.
+Treat every agent decision as provisional, not final: this accelerates a human reviewer, it doesn't replace one. Surface `maybe` calls and a sample of `exclude` calls (PRISMA and Cochrane guidance both expect some human verification of automated/single-reviewer screening) back to the user before treating them as settled — if the user overrides one, append a *new* decision event on top rather than editing the agent's, so both are visible in the log.
 
 ### 5. Full-text eligibility assessment
 
-For every record that survived screening, note whether the full text was retrievable (`counts.eligibility.not_retrieved` for the ones that weren't — this is its own PRISMA-tracked number, not silently dropped). For retrieved texts, assess against the same criteria at full-text depth and record `eligibility_decision` with a reason. Keep this stage's exclusion-reason taxonomy distinct from the screening stage's — PRISMA reports them separately because full-text exclusions are typically more specific (e.g., "wrong outcome measure" vs. a title/abstract-stage "wrong population").
+For every report that survived screening (current screening decision is `include` or `maybe`), note whether the full text was retrievable — append an eligibility decision event with `full_text_retrieved: false` for the ones that weren't (this is its own PRISMA-tracked number, not silently dropped). For retrieved texts, assess against the same criteria at full-text depth and append an eligibility decision with a reason. Keep this stage's `reason_category` vocabulary distinct from the screening stage's — PRISMA reports them separately because full-text exclusions are typically more specific (e.g., "wrong outcome measure" vs. a title/abstract-stage "wrong population").
 
 ### 6. Data extraction
 
-For every included study, extract the structured fields the user's synthesis needs (this varies by review — ask, don't assume a fixed schema beyond the PRISMA-required basics of design, population, sample size, and outcome data). Store extracted fields under each record's `extraction` object. If the user wants risk-of-bias assessment (PRISMA item #18), record that per-study too — it's a per-tool judgment call (e.g., Cochrane RoB 2, ROBINS-I) that needs the user to pick the instrument.
+**6a. Link reports into studies first.** If any included reports are different publications of the same underlying trial (a registry entry plus its eventual journal article, a conference abstract plus the full publication), run `scripts/link_study.py prisma-state.json --reports <id1> <id2> ...` to group them — ask the user if you're not sure two reports are the same study, don't guess. An included report with no explicit link is treated as its own single-report study by default, which is correct for the common case.
+
+**6b. Extract.** For every included study (not report — extract once per study, on its primary report unless the user needs per-report detail), capture the structured fields the synthesis needs — ask, don't assume a fixed schema beyond the PRISMA-required basics of design, population, sample size, and outcome data. Store it under `studies.<study_id>.extraction`. If the user wants risk-of-bias assessment (PRISMA item #18), record that under `studies.<study_id>.risk_of_bias` — the instrument (Cochrane RoB 2, ROBINS-I, etc.) is the user's judgment call, not yours.
 
 ### 7. Flow diagram and checklist
 
-Once counts are stable, run:
+Once decisions are stable, run:
 
 ```
 python3 scripts/generate_flow_diagram.py prisma-state.json --out flow-diagram --update-state
 ```
 
-This recomputes every count directly from `records` (never trust hand-edited numbers in `counts` — they're a cache) and produces `flow-diagram.mmd` (Mermaid, renders inline in most markdown viewers and Claude artifacts) and `flow-diagram.svg` (standalone, matches the standard PRISMA 2020 four-box layout: Identification → Screening → Eligibility → Included, with exclusion counts branching off at each stage).
+This recomputes every count directly from `reports`/`studies` (never trust the cached `derived` block) and produces `flow-diagram.mmd` (Mermaid) and `flow-diagram.svg`, matching the standard PRISMA 2020 four-box layout. `--update-state` also persists any 1:1 study auto-assignments for included reports that were never explicitly linked.
 
 Then run:
 
@@ -67,8 +78,8 @@ Then run:
 python3 scripts/generate_checklist.py prisma-state.json --out prisma-2020-checklist.md
 ```
 
-This walks the 27-item checklist (`references/prisma-2020-checklist.md` has the item list) and marks each item as addressed (citing where in the state file / manuscript it's satisfied) or flags it as still open. Report the open items to the user plainly — a checklist with gaps silently marked "done" defeats its purpose.
+This walks the 27-item checklist (`references/prisma-2020-checklist.md` has the item list) and marks each item addressed — citing what in the state file satisfies it — or flags it open. Extraction and risk-of-bias items are checked against the actual set of included *studies*, not a raw count, so a study that's missing extraction data shows up by name. Report the open items to the user plainly — a checklist with gaps silently marked "done" defeats its purpose.
 
 ## Updating an existing review, not just starting one
 
-If `prisma-state.json` already has records, the user is far more likely to be resuming than restarting. Read `counts` and the per-record `stage` fields to figure out where they left off, summarize that back to them ("You've screened 340 of 512 records; 38 are in eligibility review"), and pick up there rather than re-running earlier phases.
+If `prisma-state.json` already has reports, the user is far more likely to be resuming than restarting. Run the flow-diagram script (it's read-only without `--update-state`) to see current counts and pending totals, summarize that back to them ("You've screened 340 of 512 reports; 38 are in eligibility review"), and pick up there rather than re-running earlier phases.

@@ -1,0 +1,153 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/prabhakar349/prisma-systematic-review/state-schema.json",
+  "title": "prisma-state.json",
+  "type": "object",
+  "required": ["protocol", "search_runs", "reports", "studies"],
+  "additionalProperties": false,
+  "definitions": {
+    "decisionEvent": {
+      "type": "object",
+      "required": ["decision", "reviewer", "timestamp", "protocol_version"],
+      "additionalProperties": false,
+      "properties": {
+        "decision": { "type": "string", "enum": ["include", "exclude", "maybe"] },
+        "reason_category": { "type": "string" },
+        "reason": { "type": "string" },
+        "reviewer": { "type": "string", "pattern": "^(agent|human:.+)$" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "protocol_version": { "type": "integer", "minimum": 1 },
+        "full_text_retrieved": { "type": "boolean" },
+        "supersedes": { "type": "integer", "minimum": 0 }
+      },
+      "if": { "properties": { "decision": { "const": "include" } } },
+      "then": {},
+      "else": {
+        "anyOf": [
+          { "required": ["reason_category", "reason"] }
+        ]
+      }
+    }
+  },
+  "properties": {
+    "protocol": {
+      "type": "object",
+      "required": ["version", "status", "research_question", "framing", "eligibility_criteria", "search_strategy"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "integer", "minimum": 1 },
+        "status": { "type": "string", "enum": ["draft", "confirmed"] },
+        "confirmed_at": { "type": ["string", "null"], "format": "date-time" },
+        "research_question": { "type": "string", "minLength": 1 },
+        "framing": { "type": "string", "enum": ["PICO", "PECO"] },
+        "picos": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "population": { "type": "string" },
+            "intervention": { "type": "string" },
+            "exposure": { "type": "string" },
+            "comparator": { "type": "string" },
+            "outcome": { "type": "string" },
+            "study_design": { "type": "string" }
+          }
+        },
+        "eligibility_criteria": {
+          "type": "object",
+          "required": ["inclusion", "exclusion"],
+          "additionalProperties": false,
+          "properties": {
+            "inclusion": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+            "exclusion": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+          }
+        },
+        "search_strategy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sources": { "type": "array", "items": { "type": "string" } },
+            "manual_sources": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "search_runs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["source", "searched_at"],
+        "additionalProperties": false,
+        "properties": {
+          "source": { "type": "string" },
+          "query": { "type": "string" },
+          "method": { "type": "string" },
+          "searched_at": { "type": "string", "format": "date-time" },
+          "result_count": { "type": "integer", "minimum": 0 },
+          "retrieved_count": { "type": "integer", "minimum": 0 },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "reports": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["source", "title", "stage"],
+        "additionalProperties": false,
+        "properties": {
+          "search_run_id": { "type": "string" },
+          "source": { "type": "string" },
+          "source_id": { "type": "string" },
+          "identifiers": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "doi": { "type": ["string", "null"] },
+              "pmid": { "type": ["string", "null"] },
+              "pmcid": { "type": ["string", "null"] },
+              "nct_id": { "type": ["string", "null"] }
+            }
+          },
+          "report_type": {
+            "type": "string",
+            "enum": [
+              "primary_publication", "follow_up", "secondary_analysis",
+              "conference_abstract", "registry_record", "preprint", "other"
+            ]
+          },
+          "title": { "type": "string", "minLength": 1 },
+          "authors": { "type": "array", "items": { "type": "string" } },
+          "year": { "type": ["integer", "null"] },
+          "abstract": { "type": "string" },
+          "dedup_status": { "type": "string", "pattern": "^(unique|duplicate_of:.+)$" },
+          "stage": {
+            "type": "string",
+            "enum": ["identified", "screened", "excluded", "eligible_for_full_text",
+                     "full_text_not_retrieved", "full_text_excluded", "included"]
+          },
+          "study_id": { "type": "string" },
+          "screening_decisions": { "type": "array", "items": { "$ref": "#/definitions/decisionEvent" } },
+          "eligibility_decisions": { "type": "array", "items": { "$ref": "#/definitions/decisionEvent" } }
+        }
+      }
+    },
+    "studies": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["reports"],
+        "additionalProperties": false,
+        "properties": {
+          "reports": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "primary_report": { "type": "string" },
+          "extraction": { "type": "object" },
+          "risk_of_bias": { "type": "object" }
+        }
+      }
+    },
+    "derived": {
+      "description": "Cache written by generate_flow_diagram.py. Never hand-edit; never trust without regenerating.",
+      "type": "object"
+    }
+  }
+}

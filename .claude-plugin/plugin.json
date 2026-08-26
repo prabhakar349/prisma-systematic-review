@@ -1,6 +1,6 @@
 {
   "name": "prisma-systematic-review",
   "description": "Run a full PRISMA 2020 systematic literature review: eligibility criteria, multi-source search, deduplication, screening, data extraction, flow diagram, and checklist.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": { "name": "" }
 }

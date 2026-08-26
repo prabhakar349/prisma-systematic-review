@@ -1,0 +1,34 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        with-jsonschema: [true, false]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install jsonschema (validates the real-schema path)
+        if: matrix.with-jsonschema
+        run: pip install jsonschema
+      - name: Run tests
+        run: python3 -m unittest discover -v
+        working-directory: tests
+      - name: Validate the example fixture
+        run: python3 skills/prisma-systematic-review/scripts/validate_state.py fixtures/example-review/prisma-state.json
+      - name: Regenerate example outputs and diff against committed copies
+        run: |
+          rm -rf /tmp/example-review-check
+          cp -R fixtures/example-review /tmp/example-review-check
+          cd /tmp/example-review-check
+          python3 "$GITHUB_WORKSPACE/skills/prisma-systematic-review/scripts/generate_flow_diagram.py" prisma-state.json --out flow-diagram
+          python3 "$GITHUB_WORKSPACE/skills/prisma-systematic-review/scripts/generate_checklist.py" prisma-state.json --out prisma-2020-checklist.md
+          diff flow-diagram.mmd "$GITHUB_WORKSPACE/fixtures/example-review/flow-diagram.mmd"
+          diff prisma-2020-checklist.md "$GITHUB_WORKSPACE/fixtures/example-review/prisma-2020-checklist.md"

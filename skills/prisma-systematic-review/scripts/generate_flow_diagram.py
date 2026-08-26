@@ -1,33 +1,50 @@
 #!/usr/bin/env python3
-"""Recompute PRISMA 2020 flow-diagram counts from prisma-state.json records
-and render both a Mermaid flowchart (.mmd) and a standalone SVG.
+"""Recompute PRISMA 2020 flow-diagram counts from prisma-state.json and
+render both a Mermaid flowchart (.mmd) and a standalone SVG.
 
-Counts are ALWAYS derived from the `records` dict, never read from the
-`counts` block in the state file — that block is a cache and gets
-overwritten by this script. This is deliberate: a hand-edited count that
-drifts from the actual record tally is a silent correctness bug in a
-document meant to be an audit trail.
+Counts are ALWAYS derived from `reports` and `studies`, never read from
+a cached `derived` block — that block is a cache and gets overwritten by
+this script. A hand-edited count that drifts from the actual record
+tally is a silent correctness bug in a document meant to be an audit
+trail.
 
-If some records haven't reached a stage yet (e.g. screened but not yet
-assessed for eligibility), this script reports them as "pending" rather
-than guessing a final number — the flow diagram is a snapshot, and PRISMA
-review authors should regenerate it once the review is complete.
+Each report's *current* screening/eligibility decision is the last
+entry in its decision-event list, not a single overwritable field — see
+references/state-schema.md for why. A record whose decision history is
+exclude -> include reports as currently included; the exclude is still
+in the log for anyone who wants to see it changed.
+
+Reports vs. studies: PRISMA distinguishes a *report* (one publication —
+a journal article, a conference abstract, a trial registry entry) from
+a *study* (the underlying piece of research, which may have several
+reports). An included report with no `study_id` yet is assumed to be
+its own single-report study — pass --update-state to persist that
+1:1 assignment into `studies`, or link multiple reports to one study
+first with link_study.py if you know they're the same underlying trial.
 """
 import argparse
 import json
+import os
 import sys
 from collections import Counter
 
 
 def classify_source(source):
-    if source == "clinicaltrials":
+    if source in ("clinicaltrials", "registry", "who-ictrp"):
         return "registers"
     if source == "manual":
         return "other_methods"
     return "databases"
 
 
-def compute_counts(records):
+def current_decision(events):
+    """The log is append-only and chronological; the current decision is
+    simply the last entry. `supersedes` is audit metadata, not a pointer
+    the reader needs to follow — last-wins is unambiguous by construction."""
+    return events[-1] if events else None
+
+
+def compute_counts(reports, studies):
     counts = {
         "identification": {"databases": 0, "registers": 0, "other_methods": 0, "duplicates_removed": 0},
         "screening": {"screened": 0, "excluded": 0, "exclusion_reasons": Counter()},
@@ -36,50 +53,66 @@ def compute_counts(records):
         "pending": {"awaiting_screening": 0, "awaiting_eligibility": 0},
     }
 
-    for rec in records.values():
-        counts["identification"][classify_source(rec.get("source"))] += 1
-        if str(rec.get("dedup_status", "")).startswith("duplicate_of:"):
+    for rep in reports.values():
+        counts["identification"][classify_source(rep.get("source"))] += 1
+        if str(rep.get("dedup_status", "")).startswith("duplicate_of:"):
             counts["identification"]["duplicates_removed"] += 1
 
-    unique_records = [
-        rec for rec in records.values()
-        if not str(rec.get("dedup_status", "")).startswith("duplicate_of:")
-    ]
+    unique_reports = {
+        rid: rep for rid, rep in reports.items()
+        if not str(rep.get("dedup_status", "")).startswith("duplicate_of:")
+    }
 
-    passed_screening = []
-    for rec in unique_records:
-        sd = rec.get("screening_decision")
-        if not sd:
+    passed_screening = {}
+    for rid, rep in unique_reports.items():
+        decision = current_decision(rep.get("screening_decisions", []))
+        if decision is None:
             counts["pending"]["awaiting_screening"] += 1
             continue
         counts["screening"]["screened"] += 1
-        if sd["decision"] == "exclude":
+        if decision["decision"] == "exclude":
             counts["screening"]["excluded"] += 1
-            counts["screening"]["exclusion_reasons"][sd.get("reason_category", "unspecified")] += 1
+            counts["screening"]["exclusion_reasons"][decision.get("reason_category", "unspecified")] += 1
         else:
-            passed_screening.append(rec)
+            passed_screening[rid] = rep
 
     counts["eligibility"]["sought"] = len(passed_screening)
-    for rec in passed_screening:
-        ed = rec.get("eligibility_decision")
-        if not ed:
+    included_report_ids = []
+    for rid, rep in passed_screening.items():
+        decision = current_decision(rep.get("eligibility_decisions", []))
+        if decision is None:
             counts["pending"]["awaiting_eligibility"] += 1
             continue
-        if ed.get("full_text_retrieved") is False:
+        if decision.get("full_text_retrieved") is False:
             counts["eligibility"]["not_retrieved"] += 1
             continue
         counts["eligibility"]["assessed"] += 1
-        if ed["decision"] == "exclude":
+        if decision["decision"] == "exclude":
             counts["eligibility"]["excluded"] += 1
-            counts["eligibility"]["exclusion_reasons"][ed.get("reason_category", "unspecified")] += 1
+            counts["eligibility"]["exclusion_reasons"][decision.get("reason_category", "unspecified")] += 1
         else:
-            counts["included"]["studies"] += 1
+            included_report_ids.append(rid)
 
-    counts["included"]["reports"] = counts["included"]["studies"]  # v0.1: no multi-report consolidation
+    counts["included"]["reports"] = len(included_report_ids)
+
+    # Study linking: an included report keeps its existing study_id if
+    # one was assigned (e.g. via link_study.py); otherwise it's treated
+    # as its own single-report study. auto_studies records the 1:1
+    # assignments the caller may want to persist with --update-state.
+    study_ids = set()
+    auto_studies = {}
+    for rid in included_report_ids:
+        rep = reports[rid]
+        sid = rep.get("study_id")
+        if not sid:
+            sid = f"study:{rid}"
+            auto_studies[sid] = {"reports": [rid], "primary_report": rid}
+        study_ids.add(sid)
+    counts["included"]["studies"] = len(study_ids)
 
     counts["screening"]["exclusion_reasons"] = dict(counts["screening"]["exclusion_reasons"])
     counts["eligibility"]["exclusion_reasons"] = dict(counts["eligibility"]["exclusion_reasons"])
-    return counts
+    return counts, auto_studies
 
 
 def reason_lines(reasons):
@@ -134,8 +167,8 @@ def render_svg(counts):
     side_x, side_w = 420, 340
     y = 20
     gap = 30
-    boxes = []   # (x, y, w, h, lines)
-    arrows = []  # (x1, y1, x2, y2)
+    boxes = []
+    arrows = []
 
     def add_box(x, w, title, extra_lines=None, y_override=None):
         nonlocal y
@@ -214,10 +247,10 @@ def render_svg(counts):
     for (src, dst) in arrows:
         sx, sy, sw, sh, _ = src
         dx, dy, dw, dh, _ = dst
-        if dx == sx:  # straight down
+        if dx == sx:
             x1, y1 = sx + sw / 2, sy + sh
             x2, y2 = dx + dw / 2, dy
-        else:  # branch right
+        else:
             x1, y1 = sx + sw, sy + sh / 2
             x2, y2 = dx, dy + dh / 2
         svg_parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" '
@@ -228,7 +261,7 @@ def render_svg(counts):
 
 
 def escape_xml(text):
-    return (text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def main():
@@ -236,21 +269,29 @@ def main():
     parser.add_argument("state_path", help="Path to prisma-state.json")
     parser.add_argument("--out", default="flow-diagram", help="Output basename (default: flow-diagram)")
     parser.add_argument("--update-state", action="store_true",
-                         help="Also write the recomputed counts back into the state file")
+                         help="Also write recomputed counts, and any auto-created 1:1 studies, back into the state file")
     args = parser.parse_args()
 
     with open(args.state_path) as f:
         state = json.load(f)
 
-    counts = compute_counts(state.get("records", {}))
+    counts, auto_studies = compute_counts(state.get("reports", {}), state.get("studies", {}))
 
     pending = counts.pop("pending")
     if pending["awaiting_screening"] or pending["awaiting_eligibility"]:
         print("NOTE: this is a snapshot of a review still in progress:")
         if pending["awaiting_screening"]:
-            print(f"  {pending['awaiting_screening']} unique record(s) not yet screened")
+            print(f"  {pending['awaiting_screening']} unique report(s) not yet screened")
         if pending["awaiting_eligibility"]:
-            print(f"  {pending['awaiting_eligibility']} record(s) awaiting full-text eligibility assessment")
+            print(f"  {pending['awaiting_eligibility']} report(s) awaiting full-text eligibility assessment")
+        print()
+
+    if auto_studies:
+        print(f"NOTE: {len(auto_studies)} included report(s) have no study_id yet — "
+              f"counted as their own single-report study for this snapshot.")
+        if args.update_state:
+            print("      Persisting these as 1:1 studies (pass link_study.py first if any of these "
+                  "are actually multiple reports of the same trial).")
         print()
 
     mmd_path = f"{args.out}.mmd"
@@ -264,10 +305,13 @@ def main():
     print(json.dumps(counts, indent=2))
 
     if args.update_state:
-        state["counts"] = counts
+        for sid, study in auto_studies.items():
+            state.setdefault("studies", {})[sid] = study
+            state["reports"][study["primary_report"]]["study_id"] = sid
+        state["derived"] = counts
         with open(args.state_path, "w") as f:
             json.dump(state, f, indent=2)
-        print(f"\nUpdated counts written back to {args.state_path}")
+        print(f"\nUpdated state written back to {args.state_path}")
 
 
 if __name__ == "__main__":

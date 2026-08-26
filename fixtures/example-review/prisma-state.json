@@ -1,5 +1,8 @@
 {
   "protocol": {
+    "version": 1,
+    "status": "confirmed",
+    "confirmed_at": "2026-08-25T00:00:00Z",
     "research_question": "Does drug X reduce hospitalization in adults with condition Y compared to standard of care?",
     "framing": "PICO",
     "picos": {
@@ -26,87 +29,155 @@
         "pubmed",
         "clinicaltrials"
       ],
-      "date_range": "2015-01-01 to 2026-08-25",
-      "queries": {
-        "pubmed": "drug X AND condition Y AND hospitalization"
-      }
+      "manual_sources": []
     }
   },
-  "records": {
+  "search_runs": {
+    "run-pubmed-1": {
+      "source": "pubmed",
+      "query": "drug X AND condition Y AND hospitalization",
+      "searched_at": "2026-08-25T00:00:00Z",
+      "result_count": 3,
+      "retrieved_count": 3
+    },
+    "run-clinicaltrials-1": {
+      "source": "clinicaltrials",
+      "query": "drug X AND condition Y",
+      "searched_at": "2026-08-25T00:00:00Z",
+      "result_count": 1,
+      "retrieved_count": 1
+    }
+  },
+  "reports": {
     "r1": {
+      "search_run_id": "run-pubmed-1",
       "source": "pubmed",
       "source_id": "PMID1",
+      "identifiers": {
+        "doi": "10.1/abc",
+        "pmid": "PMID1"
+      },
+      "report_type": "primary_publication",
       "title": "Effect of Drug X on Hospitalization in Condition Y",
       "authors": [
         "Smith J"
       ],
       "year": 2022,
-      "doi": "10.1/abc",
       "abstract": "An RCT of drug X vs standard of care in adults with condition Y, reporting hospitalization.",
       "dedup_status": "unique",
-      "screening_decision": {
-        "decision": "include",
-        "reviewer": "agent"
-      },
-      "eligibility_decision": {
-        "full_text_retrieved": true,
-        "decision": "include",
-        "reviewer": "human:pdigumarthi"
-      },
-      "extraction": {
-        "sample_size": 240,
-        "outcome_result": "significant reduction",
-        "risk_of_bias": "low"
-      }
+      "stage": "included",
+      "study_id": "study:r1",
+      "screening_decisions": [
+        {
+          "decision": "include",
+          "reviewer": "agent",
+          "timestamp": "2026-08-25T00:05:00Z",
+          "protocol_version": 1
+        }
+      ],
+      "eligibility_decisions": [
+        {
+          "decision": "include",
+          "full_text_retrieved": true,
+          "reviewer": "human:pdigumarthi",
+          "timestamp": "2026-08-25T00:10:00Z",
+          "protocol_version": 1
+        }
+      ]
     },
     "r2": {
+      "search_run_id": "run-pubmed-1",
       "source": "pubmed",
       "source_id": "PMID2",
+      "identifiers": {
+        "doi": "10.1/abc",
+        "pmid": "PMID2"
+      },
+      "report_type": "primary_publication",
       "title": "Effect of Drug X on Hospitalization in Condition Y ",
       "authors": [
         "Smith J"
       ],
       "year": 2022,
-      "doi": "10.1/abc",
       "abstract": "duplicate of r1 via preprint listing",
-      "dedup_status": "duplicate_of:r1"
+      "dedup_status": "duplicate_of:r1",
+      "stage": "identified",
+      "screening_decisions": [],
+      "eligibility_decisions": []
     },
     "r3": {
+      "search_run_id": "run-clinicaltrials-1",
       "source": "clinicaltrials",
       "source_id": "NCT001",
+      "identifiers": {
+        "nct_id": "NCT001"
+      },
+      "report_type": "registry_record",
       "title": "Pediatric use of Drug X for Condition Y",
       "authors": [],
       "year": 2021,
-      "doi": null,
       "abstract": "A pediatric cohort study, no comparator arm.",
       "dedup_status": "unique",
-      "screening_decision": {
-        "decision": "exclude",
-        "reason_category": "wrong population",
-        "reason": "Pediatric cohort; criteria require adults.",
-        "reviewer": "agent"
-      }
+      "stage": "excluded",
+      "screening_decisions": [
+        {
+          "decision": "exclude",
+          "reason_category": "wrong population",
+          "reason": "Pediatric cohort; criteria require adults.",
+          "reviewer": "agent",
+          "timestamp": "2026-08-25T00:05:00Z",
+          "protocol_version": 1
+        }
+      ],
+      "eligibility_decisions": []
     },
     "r4": {
+      "search_run_id": "run-pubmed-1",
       "source": "pubmed",
       "source_id": "PMID4",
+      "identifiers": {
+        "doi": "10.1/xyz",
+        "pmid": "PMID4"
+      },
+      "report_type": "primary_publication",
       "title": "Observational study of Drug X in Condition Y",
       "authors": [
         "Lee K"
       ],
       "year": 2023,
-      "doi": "10.1/xyz",
       "abstract": "A retrospective cohort, non-RCT design.",
       "dedup_status": "unique",
-      "screening_decision": {
-        "decision": "exclude",
-        "reason_category": "wrong study design",
-        "reason": "Retrospective cohort, not an RCT.",
-        "reviewer": "agent"
+      "stage": "excluded",
+      "screening_decisions": [
+        {
+          "decision": "exclude",
+          "reason_category": "wrong study design",
+          "reason": "Retrospective cohort, not an RCT.",
+          "reviewer": "agent",
+          "timestamp": "2026-08-25T00:05:00Z",
+          "protocol_version": 1
+        }
+      ],
+      "eligibility_decisions": []
+    }
+  },
+  "studies": {
+    "study:r1": {
+      "reports": [
+        "r1"
+      ],
+      "primary_report": "r1",
+      "extraction": {
+        "sample_size": 240,
+        "outcome_result": "significant reduction"
+      },
+      "risk_of_bias": {
+        "instrument": "Cochrane RoB 2",
+        "overall": "low"
       }
     }
   },
-  "counts": {
+  "derived": {
     "identification": {
       "databases": 3,
       "registers": 1,

@@ -6,6 +6,13 @@ Items that genuinely require the researcher's own judgment or manuscript
 prose (rationale, interpretation, competing interests, etc.) are always
 flagged as open — silently marking a subjective item "done" would defeat
 the point of a reporting checklist.
+
+Two things this deliberately checks strictly, because a looser check
+would rubber-stamp incomplete work: eligibility criteria needs BOTH
+inclusion AND exclusion criteria present (one alone isn't a usable
+criterion set), and extraction/risk-of-bias coverage is checked against
+the actual set of *included* studies, not just a total count that a
+study excluded earlier could accidentally satisfy.
 """
 import argparse
 import json
@@ -13,7 +20,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from generate_flow_diagram import compute_counts  # noqa: E402
+from generate_flow_diagram import compute_counts, current_decision  # noqa: E402
 
 CHECKLIST = [
     (1, "Title", "Identify the report as a systematic review", "manual"),
@@ -58,7 +65,25 @@ def nonempty(v):
     return bool(v)
 
 
-def evaluate(auto_check, state, counts, records, flow_diagram_paths):
+def included_study_ids(reports, studies, counts):
+    """The actual set of included study ids — including the auto 1:1
+    assignment generate_flow_diagram.py would make for an included
+    report that has no explicit study_id yet."""
+    ids = set()
+    for rid, rep in reports.items():
+        if str(rep.get("dedup_status", "")).startswith("duplicate_of:"):
+            continue
+        sd = current_decision(rep.get("screening_decisions", []))
+        if not sd or sd["decision"] == "exclude":
+            continue
+        ed = current_decision(rep.get("eligibility_decisions", []))
+        if not ed or ed.get("full_text_retrieved") is False or ed["decision"] == "exclude":
+            continue
+        ids.add(rep.get("study_id") or f"study:{rid}")
+    return ids
+
+
+def evaluate(auto_check, state, counts, reports, studies, flow_diagram_paths):
     protocol = state.get("protocol", {})
 
     if auto_check == "manual":
@@ -70,15 +95,16 @@ def evaluate(auto_check, state, counts, records, flow_diagram_paths):
 
     if auto_check == "eligibility_criteria":
         crit = protocol.get("eligibility_criteria", {})
-        ok = nonempty(crit.get("inclusion")) or nonempty(crit.get("exclusion"))
-        return ok, f"{len(crit.get('inclusion', []))} inclusion, {len(crit.get('exclusion', []))} exclusion criteria recorded"
+        n_inc, n_exc = len(crit.get("inclusion", [])), len(crit.get("exclusion", []))
+        ok = n_inc > 0 and n_exc > 0
+        return ok, f"{n_inc} inclusion, {n_exc} exclusion criteria recorded (both required)"
 
     if auto_check == "sources":
         sources = protocol.get("search_strategy", {}).get("sources", [])
         return nonempty(sources), f"Sources: {', '.join(sources) if sources else 'none recorded'}"
 
     if auto_check == "queries":
-        queries = protocol.get("search_strategy", {}).get("queries", {})
+        queries = {sr.get("source"): sr.get("query") for sr in state.get("search_runs", {}).values() if sr.get("query")}
         return nonempty(queries), f"{len(queries)} source(s) with a recorded query string"
 
     if auto_check == "flow_diagram":
@@ -90,14 +116,18 @@ def evaluate(auto_check, state, counts, records, flow_diagram_paths):
         return nonempty(reasons), f"{len(reasons)} exclusion-reason categor(y/ies) at full-text stage"
 
     if auto_check == "extraction":
-        with_extraction = sum(1 for r in records.values() if nonempty(r.get("extraction")))
-        included = counts["included"]["studies"]
-        return with_extraction >= included and included > 0, f"{with_extraction} record(s) have extraction data ({included} included)"
+        included = included_study_ids(reports, studies, counts)
+        missing = [sid for sid in included if not nonempty(studies.get(sid, {}).get("extraction"))]
+        ok = len(included) > 0 and not missing
+        return ok, (f"{len(included) - len(missing)}/{len(included)} included stud(y/ies) have extraction data"
+                    + (f" — missing: {missing}" if missing else ""))
 
     if auto_check == "risk_of_bias":
-        with_rob = sum(1 for r in records.values() if nonempty(r.get("extraction", {}).get("risk_of_bias")))
-        included = counts["included"]["studies"]
-        return with_rob >= included and included > 0, f"{with_rob} record(s) have a risk_of_bias field ({included} included)"
+        included = included_study_ids(reports, studies, counts)
+        missing = [sid for sid in included if not nonempty(studies.get(sid, {}).get("risk_of_bias"))]
+        ok = len(included) > 0 and not missing
+        return ok, (f"{len(included) - len(missing)}/{len(included)} included stud(y/ies) have a risk_of_bias field"
+                    + (f" — missing: {missing}" if missing else ""))
 
     return None, "Unknown check type."
 
@@ -113,15 +143,16 @@ def main():
     with open(args.state_path) as f:
         state = json.load(f)
 
-    records = state.get("records", {})
-    counts = compute_counts(records)
+    reports = state.get("reports", {})
+    studies = state.get("studies", {})
+    counts, _ = compute_counts(reports, studies)
     flow_diagram_paths = [f"{args.flow_diagram_base}.svg", f"{args.flow_diagram_base}.mmd"]
 
     rows = []
     satisfied = 0
     open_items = 0
     for num, section, item, auto_check in CHECKLIST:
-        ok, note = evaluate(auto_check, state, counts, records, flow_diagram_paths)
+        ok, note = evaluate(auto_check, state, counts, reports, studies, flow_diagram_paths)
         if ok is True:
             status = "✅ addressed"
             satisfied += 1
