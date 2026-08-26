@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 648" font-family="Helvetica, Arial, sans-serif" font-size="13">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#333"/></marker></defs>
+<rect x="0" y="0" width="800" height="648" fill="white"/>
+<rect x="40" y="20" width="320" height="82" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
+<text x="200.0" y="42" text-anchor="middle" font-weight="bold">Records identified</text>
+<text x="200.0" y="58" text-anchor="middle" font-weight="normal">Databases: n=3</text>
+<text x="200.0" y="74" text-anchor="middle" font-weight="normal">Registers: n=1</text>
+<rect x="40" y="132" width="320" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
+<text x="200.0" y="154" text-anchor="middle" font-weight="bold">Duplicates removed</text>
+<text x="200.0" y="170" text-anchor="middle" font-weight="normal">n=1</text>
+<rect x="40" y="228" width="320" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
+<text x="200.0" y="250" text-anchor="middle" font-weight="bold">Records screened</text>
+<text x="200.0" y="266" text-anchor="middle" font-weight="normal">n=3</text>
+<rect x="420" y="228" width="340" height="98" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
+<text x="590.0" y="250" text-anchor="middle" font-weight="bold">Records excluded</text>
+<text x="590.0" y="266" text-anchor="middle" font-weight="normal">n=2</text>
+<text x="590.0" y="282" text-anchor="middle" font-weight="normal">wrong population (n=1)</text>
+<text x="590.0" y="298" text-anchor="middle" font-weight="normal">wrong study design (n=1)</text>
+<rect x="40" y="324" width="320" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
+<text x="200.0" y="346" text-anchor="middle" font-weight="bold">Reports sought for retrieval</text>
+<text x="200.0" y="362" text-anchor="middle" font-weight="normal">n=1</text>
+<rect x="420" y="324" width="340" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
+<text x="590.0" y="346" text-anchor="middle" font-weight="bold">Reports not retrieved</text>
+<text x="590.0" y="362" text-anchor="middle" font-weight="normal">n=0</text>
+<rect x="40" y="420" width="320" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
+<text x="200.0" y="442" text-anchor="middle" font-weight="bold">Reports assessed for eligibility</text>
+<text x="200.0" y="458" text-anchor="middle" font-weight="normal">n=1</text>
+<rect x="420" y="420" width="340" height="66" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
+<text x="590.0" y="442" text-anchor="middle" font-weight="bold">Reports excluded</text>
+<text x="590.0" y="458" text-anchor="middle" font-weight="normal">n=0</text>
+<rect x="40" y="516" width="320" height="82" rx="6" fill="#f5f7fa" stroke="#333" stroke-width="1.5"/>
+<text x="200.0" y="538" text-anchor="middle" font-weight="bold">Studies included in review</text>
+<text x="200.0" y="554" text-anchor="middle" font-weight="normal">n=1</text>
+<text x="200.0" y="570" text-anchor="middle" font-weight="normal">Reports of included studies: n=1</text>
+<line x1="200.0" y1="102" x2="200.0" y2="132" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="200.0" y1="198" x2="200.0" y2="228" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="360" y1="261.0" x2="420" y2="277.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="200.0" y1="294" x2="200.0" y2="324" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="360" y1="357.0" x2="420" y2="357.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="200.0" y1="390" x2="200.0" y2="420" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="360" y1="453.0" x2="420" y2="453.0" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="200.0" y1="486" x2="200.0" y2="516" stroke="#333" stroke-width="1.5" marker-end="url(#arrow)"/>
+</svg>

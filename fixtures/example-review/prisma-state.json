@@ -1,0 +1,136 @@
+{
+  "protocol": {
+    "research_question": "Does drug X reduce hospitalization in adults with condition Y compared to standard of care?",
+    "framing": "PICO",
+    "picos": {
+      "population": "adults with condition Y",
+      "intervention": "drug X",
+      "comparator": "standard of care",
+      "outcome": "hospitalization rate",
+      "study_design": "RCT"
+    },
+    "eligibility_criteria": {
+      "inclusion": [
+        "RCT",
+        "adult population",
+        "reports hospitalization outcome"
+      ],
+      "exclusion": [
+        "pediatric population",
+        "non-RCT design",
+        "no comparator arm"
+      ]
+    },
+    "search_strategy": {
+      "sources": [
+        "pubmed",
+        "clinicaltrials"
+      ],
+      "date_range": "2015-01-01 to 2026-08-25",
+      "queries": {
+        "pubmed": "drug X AND condition Y AND hospitalization"
+      }
+    }
+  },
+  "records": {
+    "r1": {
+      "source": "pubmed",
+      "source_id": "PMID1",
+      "title": "Effect of Drug X on Hospitalization in Condition Y",
+      "authors": [
+        "Smith J"
+      ],
+      "year": 2022,
+      "doi": "10.1/abc",
+      "abstract": "An RCT of drug X vs standard of care in adults with condition Y, reporting hospitalization.",
+      "dedup_status": "unique",
+      "screening_decision": {
+        "decision": "include",
+        "reviewer": "agent"
+      },
+      "eligibility_decision": {
+        "full_text_retrieved": true,
+        "decision": "include",
+        "reviewer": "human:pdigumarthi"
+      },
+      "extraction": {
+        "sample_size": 240,
+        "outcome_result": "significant reduction",
+        "risk_of_bias": "low"
+      }
+    },
+    "r2": {
+      "source": "pubmed",
+      "source_id": "PMID2",
+      "title": "Effect of Drug X on Hospitalization in Condition Y ",
+      "authors": [
+        "Smith J"
+      ],
+      "year": 2022,
+      "doi": "10.1/abc",
+      "abstract": "duplicate of r1 via preprint listing",
+      "dedup_status": "duplicate_of:r1"
+    },
+    "r3": {
+      "source": "clinicaltrials",
+      "source_id": "NCT001",
+      "title": "Pediatric use of Drug X for Condition Y",
+      "authors": [],
+      "year": 2021,
+      "doi": null,
+      "abstract": "A pediatric cohort study, no comparator arm.",
+      "dedup_status": "unique",
+      "screening_decision": {
+        "decision": "exclude",
+        "reason_category": "wrong population",
+        "reason": "Pediatric cohort; criteria require adults.",
+        "reviewer": "agent"
+      }
+    },
+    "r4": {
+      "source": "pubmed",
+      "source_id": "PMID4",
+      "title": "Observational study of Drug X in Condition Y",
+      "authors": [
+        "Lee K"
+      ],
+      "year": 2023,
+      "doi": "10.1/xyz",
+      "abstract": "A retrospective cohort, non-RCT design.",
+      "dedup_status": "unique",
+      "screening_decision": {
+        "decision": "exclude",
+        "reason_category": "wrong study design",
+        "reason": "Retrospective cohort, not an RCT.",
+        "reviewer": "agent"
+      }
+    }
+  },
+  "counts": {
+    "identification": {
+      "databases": 3,
+      "registers": 1,
+      "other_methods": 0,
+      "duplicates_removed": 1
+    },
+    "screening": {
+      "screened": 3,
+      "excluded": 2,
+      "exclusion_reasons": {
+        "wrong population": 1,
+        "wrong study design": 1
+      }
+    },
+    "eligibility": {
+      "sought": 1,
+      "not_retrieved": 0,
+      "assessed": 1,
+      "excluded": 0,
+      "exclusion_reasons": {}
+    },
+    "included": {
+      "studies": 1,
+      "reports": 1
+    }
+  }
+}

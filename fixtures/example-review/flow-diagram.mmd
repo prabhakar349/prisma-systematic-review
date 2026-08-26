@@ -1,0 +1,15 @@
+flowchart TD
+    subgraph ID["Identification"]
+        A1["Records identified from databases<br/>n=3"]
+        A2["Records identified from registers<br/>n=1"]
+    end
+    DEDUP["Duplicates removed<br/>n=1"]
+    A1 --> DEDUP
+    A2 --> DEDUP
+    DEDUP --> SCR["Records screened<br/>n=3"]
+    SCR --> EXCL_SCR["Records excluded<br/>n=2<br/>wrong population (n=1)<br/>wrong study design (n=1)"]
+    SCR --> SOUGHT["Reports sought for retrieval<br/>n=1"]
+    SOUGHT --> NR["Reports not retrieved<br/>n=0"]
+    SOUGHT --> ASSESSED["Reports assessed for eligibility<br/>n=1"]
+    ASSESSED --> EXCL_ELIG["Reports excluded<br/>n=0"]
+    ASSESSED --> INCLUDED["Studies included in review<br/>n=1<br/>Reports of included studies: n=1"]
