@@ -44,6 +44,37 @@ def current_decision(events):
     return events[-1] if events else None
 
 
+def is_duplicate(report):
+    return str(report.get("dedup_status", "")).startswith("duplicate_of:")
+
+
+def derive_stage(report):
+    """The ONE place that maps a report's decision history to a stage.
+    `report["stage"]` in the state file is a cache of this function's
+    output — it is never hand-set or hand-advanced, specifically because
+    a field nothing recomputes drifts the moment a decision is appended
+    (v0.1's bug: `stage` was written once as "identified" and nothing
+    ever moved it forward). compute_counts() below calls this rather
+    than re-deriving the same branching logic, so the two can't diverge."""
+    if is_duplicate(report):
+        return "identified"  # duplicates never enter the pipeline themselves
+
+    sd = current_decision(report.get("screening_decisions", []))
+    if sd is None:
+        return "identified"
+    if sd["decision"] == "exclude":
+        return "excluded"
+
+    ed = current_decision(report.get("eligibility_decisions", []))
+    if ed is None:
+        return "eligible_for_full_text"
+    if ed.get("full_text_retrieved") is False:
+        return "full_text_not_retrieved"
+    if ed["decision"] == "exclude":
+        return "full_text_excluded"
+    return "included"
+
+
 def compute_counts(reports, studies):
     counts = {
         "identification": {"databases": 0, "registers": 0, "other_methods": 0, "duplicates_removed": 0},
@@ -55,42 +86,38 @@ def compute_counts(reports, studies):
 
     for rep in reports.values():
         counts["identification"][classify_source(rep.get("source"))] += 1
-        if str(rep.get("dedup_status", "")).startswith("duplicate_of:"):
+        if is_duplicate(rep):
             counts["identification"]["duplicates_removed"] += 1
 
-    unique_reports = {
-        rid: rep for rid, rep in reports.items()
-        if not str(rep.get("dedup_status", "")).startswith("duplicate_of:")
-    }
+    included_report_ids = []
+    for rid, rep in reports.items():
+        if is_duplicate(rep):
+            continue
+        stage = derive_stage(rep)
 
-    passed_screening = {}
-    for rid, rep in unique_reports.items():
-        decision = current_decision(rep.get("screening_decisions", []))
-        if decision is None:
+        if stage == "identified":
             counts["pending"]["awaiting_screening"] += 1
             continue
-        counts["screening"]["screened"] += 1
-        if decision["decision"] == "exclude":
-            counts["screening"]["excluded"] += 1
-            counts["screening"]["exclusion_reasons"][decision.get("reason_category", "unspecified")] += 1
-        else:
-            passed_screening[rid] = rep
 
-    counts["eligibility"]["sought"] = len(passed_screening)
-    included_report_ids = []
-    for rid, rep in passed_screening.items():
-        decision = current_decision(rep.get("eligibility_decisions", []))
-        if decision is None:
+        counts["screening"]["screened"] += 1
+        if stage == "excluded":
+            sd = current_decision(rep["screening_decisions"])
+            counts["screening"]["excluded"] += 1
+            counts["screening"]["exclusion_reasons"][sd.get("reason_category", "unspecified")] += 1
+            continue
+
+        counts["eligibility"]["sought"] += 1
+        if stage == "eligible_for_full_text":
             counts["pending"]["awaiting_eligibility"] += 1
-            continue
-        if decision.get("full_text_retrieved") is False:
+        elif stage == "full_text_not_retrieved":
             counts["eligibility"]["not_retrieved"] += 1
-            continue
-        counts["eligibility"]["assessed"] += 1
-        if decision["decision"] == "exclude":
+        elif stage == "full_text_excluded":
+            ed = current_decision(rep["eligibility_decisions"])
+            counts["eligibility"]["assessed"] += 1
             counts["eligibility"]["excluded"] += 1
-            counts["eligibility"]["exclusion_reasons"][decision.get("reason_category", "unspecified")] += 1
-        else:
+            counts["eligibility"]["exclusion_reasons"][ed.get("reason_category", "unspecified")] += 1
+        elif stage == "included":
+            counts["eligibility"]["assessed"] += 1
             included_report_ids.append(rid)
 
     counts["included"]["reports"] = len(included_report_ids)
@@ -308,6 +335,8 @@ def main():
         for sid, study in auto_studies.items():
             state.setdefault("studies", {})[sid] = study
             state["reports"][study["primary_report"]]["study_id"] = sid
+        for rep in state["reports"].values():
+            rep["stage"] = derive_stage(rep)
         state["derived"] = counts
         with open(args.state_path, "w") as f:
             json.dump(state, f, indent=2)

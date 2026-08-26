@@ -116,7 +116,7 @@ identified
           -> included                   (eligibility_decisions current = include or maybe)
 ```
 
-`stage` is a derived convenience field, not a second source of truth — if it ever disagrees with what the decision events imply, trust the events and treat `stage` as stale (regenerate it, don't hand-edit it into agreement).
+`stage` is a derived convenience field, not a second source of truth. It is set by hand exactly once, at identification (`"identified"`) — every transition after that is computed by `generate_flow_diagram.derive_stage()` and written back only by `--update-state`. This isn't a style preference: a `stage` nothing recomputes drifts the moment a decision is appended (that was v0.1's bug — it was written once and never advanced again), so `validate_state.py` treats a mismatch between stored `stage` and what the decision events imply as a hard validation failure, not a warning.
 
 ## Notes
 

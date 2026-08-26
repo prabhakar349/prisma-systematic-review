@@ -13,11 +13,23 @@ enum values, decision-event shape) if it isn't — the fallback catches
 the mistakes most likely to actually happen (typo'd enums, missing
 reasons on a non-include decision) even without the dependency, since
 this project otherwise has zero external dependencies by design.
+
+A JSON Schema, however, can only check one field in isolation — it
+can't express "this report's `stage` must match what its decision
+history implies." So this script ALSO always runs a state-transition
+check via `derive_stage()`, regardless of which schema backend ran:
+a report whose stored `stage` disagrees with its decisions has drifted,
+which is exactly the failure mode `stage` is prone to if anything ever
+hand-sets or hand-advances it instead of leaving it to
+generate_flow_diagram.py --update-state.
 """
 import argparse
 import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from generate_flow_diagram import derive_stage  # noqa: E402
 
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "references", "state-schema.json")
 
@@ -92,6 +104,27 @@ def _check_decision_event(path, event):
     return errors
 
 
+def check_stage_consistency(state):
+    """Cross-field check no JSON Schema can express: a report's stored
+    `stage` must equal what its decision history implies. Skips reports
+    that have no `stage` at all — that's a structural error the schema
+    check already caught, not a drift error."""
+    errors = []
+    for report_id, report in state.get("reports", {}).items():
+        stored = report.get("stage")
+        if stored is None:
+            continue
+        expected = derive_stage(report)
+        if stored != expected:
+            errors.append(
+                f"reports.{report_id}.stage: stored as '{stored}' but its decision history implies "
+                f"'{expected}' — stage has drifted. Regenerate it with "
+                f"generate_flow_diagram.py --update-state rather than hand-setting it."
+            )
+    if errors:
+        raise ValidationError("\n".join(errors))
+
+
 def validate(state):
     """Raises ValidationError on failure. Returns None on success."""
     try:
@@ -100,14 +133,18 @@ def validate(state):
     except FileNotFoundError:
         schema = None
 
+    ran_jsonschema = False
     if schema is not None:
         try:
             validate_with_jsonschema(state, schema)
-            return
+            ran_jsonschema = True
         except ImportError:
             pass  # fall through to the dependency-free check
 
-    validate_fallback(state)
+    if not ran_jsonschema:
+        validate_fallback(state)
+
+    check_stage_consistency(state)
 
 
 def main():

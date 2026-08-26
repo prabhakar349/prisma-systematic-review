@@ -36,7 +36,7 @@ Write this into `prisma-state.json` under `protocol` with `version: 1` and `stat
 
 ### 2. Search execution (Identification)
 
-For each confirmed source, run the search and record a `search_runs` entry first — `source`, `query` (the exact string used; PRISMA item #7 requires this be reproducible by someone else), `searched_at`, and `result_count`. As results come back, append each one to `reports` with `source`, `source_id`, `identifiers` (DOI/PMID/PMCID/NCT as available), `title`, `authors`, `year`, `abstract`, `search_run_id` pointing back at the run, and `stage: "identified"`.
+For each confirmed source, run the search and record a `search_runs` entry first — `source`, `query` (the exact string used; PRISMA item #7 requires this be reproducible by someone else), `searched_at`, and `result_count`. As results come back, append each one to `reports` with `source`, `source_id`, `identifiers` (DOI/PMID/PMCID/NCT as available), `title`, `authors`, `year`, `abstract`, `search_run_id` pointing back at the run, and `stage: "identified"` (this is the one and only place you set `stage` by hand — from here on it's derived automatically, see the note at the end of step 7).
 
 For non-tool-accessible sources (register browsing, citation searching, hand-searching reference lists), still create a `search_runs` entry (`source: "manual"`, a `method` string, and the count the user gives you) rather than a tool-driven one — don't fabricate a search you didn't run, but do record that it happened.
 
@@ -79,6 +79,8 @@ python3 scripts/generate_checklist.py prisma-state.json --out prisma-2020-checkl
 ```
 
 This walks the 27-item checklist (`references/prisma-2020-checklist.md` has the item list) and marks each item addressed — citing what in the state file satisfies it — or flags it open. Extraction and risk-of-bias items are checked against the actual set of included *studies*, not a raw count, so a study that's missing extraction data shows up by name. Report the open items to the user plainly — a checklist with gaps silently marked "done" defeats its purpose.
+
+**Never hand-set or hand-advance `stage` on a report beyond its initial `"identified"` value.** `--update-state` recomputes it for every report from its decision history (`generate_flow_diagram.derive_stage`) and writes the result back — that's the only path `stage` should ever change through. `validate_state.py` checks stored `stage` against what the decisions imply and fails loudly on drift, precisely because a hand-maintained `stage` field is guaranteed to go stale the moment someone forgets to update it after a decision.
 
 ## Updating an existing review, not just starting one
 
