@@ -222,5 +222,69 @@ class TestLinkStudyIntegration(unittest.TestCase):
         self.assertEqual(set(state["studies"][study_id]["reports"]), {"registry-1", "journal-1", "unrelated-1"})
 
 
+
+class TestValidateBeforeWrite(unittest.TestCase):
+    """dedupe.py and generate_flow_diagram.py --update-state both mutate
+    prisma-state.json, so per validate_state.py's own contract ("every
+    script that mutates the state file should call validate(state)
+    before writing it back out") they must refuse to write a state that
+    fails validation — the same way link_study.py already does (see
+    test_linking_unknown_report_id_fails_loudly above). These construct
+    a state with one deliberately invalid record and confirm both
+    scripts fail loudly and leave the file untouched, rather than
+    silently writing something a later step would trip over."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.state_path = os.path.join(self.tmpdir, "prisma-state.json")
+        # 'exclude' with no reason_category/reason is invalid under both
+        # state-schema.json's decisionEvent if/then/else and the
+        # dependency-free fallback's _check_decision_event.
+        self.invalid_state = {
+            "protocol": {
+                "version": 1, "status": "confirmed", "confirmed_at": "2026-01-01T00:00:00Z",
+                "research_question": "Q", "framing": "PICO",
+                "eligibility_criteria": {"inclusion": ["RCT"], "exclusion": ["pediatric"]},
+                "search_strategy": {"sources": ["pubmed"]},
+            },
+            "search_runs": {},
+            "reports": {
+                "r1": {
+                    "source": "pubmed", "title": "A report with a broken decision event", "stage": "identified",
+                    "screening_decisions": [
+                        {"decision": "exclude", "reviewer": "agent",
+                         "timestamp": "2026-01-01T00:00:00Z", "protocol_version": 1},
+                    ],
+                },
+            },
+            "studies": {},
+        }
+        with open(self.state_path, "w") as f:
+            json.dump(self.invalid_state, f)
+        with open(self.state_path, "rb") as f:
+            self.original_bytes = f.read()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_dedupe_refuses_to_write_an_invalid_state(self):
+        code, out, err = run(script("dedupe.py"), "prisma-state.json", cwd=self.tmpdir)
+        self.assertNotEqual(code, 0)
+        self.assertIn("invalid state", err)
+        with open(self.state_path, "rb") as f:
+            self.assertEqual(f.read(), self.original_bytes, "dedupe.py must not write on a failed validation")
+
+    def test_flow_diagram_update_state_refuses_to_write_an_invalid_state(self):
+        code, out, err = run(
+            script("generate_flow_diagram.py"), "prisma-state.json", "--out", "flow-diagram", "--update-state",
+            cwd=self.tmpdir,
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn("invalid state", err)
+        with open(self.state_path, "rb") as f:
+            self.assertEqual(f.read(), self.original_bytes,
+                              "generate_flow_diagram.py --update-state must not write on a failed validation")
+
+
 if __name__ == "__main__":
     unittest.main()

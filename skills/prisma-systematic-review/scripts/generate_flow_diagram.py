@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import textwrap
 from collections import Counter
@@ -403,6 +404,19 @@ def main() -> int:
         for rep in state["reports"].values():
             rep["stage"] = derive_stage(rep)
         state["derived"] = counts
+
+        # Imported here rather than at module level: validate_state.py
+        # imports Report/derive_stage FROM this module, so a top-level
+        # import here would be circular. By the time main() runs, this
+        # module has already finished defining everything validate_state
+        # needs, so the deferred import resolves cleanly either way.
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from validate_state import ValidationError, validate
+        try:
+            validate(state)
+        except ValidationError as e:
+            raise SystemExit(f"error: --update-state produced an invalid state, not writing:\n{e}")
+
         with open(args.state_path, "w") as f:
             json.dump(state, f, indent=2)
         print(f"\nUpdated state written back to {args.state_path}")
