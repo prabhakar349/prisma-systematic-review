@@ -90,3 +90,13 @@ mypy skills/prisma-systematic-review/scripts   # type check
 ```
 
 CI runs all of this on every push, plus a regenerate-and-diff check against `fixtures/example-review/` so that fixture never silently drifts from what the scripts actually produce.
+
+## Contributing
+
+Bug reports, feature requests, and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, the test/lint/type-check commands, and what changing the state schema requires. Please also read the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Questions & feedback
+
+- **Found a bug?** Open an issue with the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md).
+- **Have an idea?** Open an issue with the [feature request template](.github/ISSUE_TEMPLATE/feature_request.md).
+- **Used it on a real review and have general feedback** — what worked, what was confusing, what you expected it to do and it didn't — that's exactly what shapes the roadmap. Use the [feedback template](.github/ISSUE_TEMPLATE/feedback.md), or start a [Discussion](https://github.com/prabhakar349/prisma-systematic-review/discussions) if you'd rather talk it through than file a report.
