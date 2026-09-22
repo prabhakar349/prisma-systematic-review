@@ -22,11 +22,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from difflib import SequenceMatcher
 from itertools import combinations
 from typing import Any, Callable
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from validate_state import ValidationError, validate  # noqa: E402
 
 Report = dict[str, Any]
 State = dict[str, Any]
@@ -202,6 +206,11 @@ def main() -> int:
         print("\nNo fuzzy near-miss pairs in the review band.")
 
     if not args.dry_run:
+        try:
+            validate(state)
+        except ValidationError as e:
+            raise SystemExit(f"error: dedup produced an invalid state, not writing:\n{e}")
+
         out_path = args.out or args.state_path
         with open(out_path, "w") as f:
             json.dump(state, f, indent=2)
