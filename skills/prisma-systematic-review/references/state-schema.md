@@ -39,6 +39,11 @@ Do not confuse this with deduplication: `dedupe.py` removes literal duplicate *e
     "search_strategy": {
       "sources": ["pubmed", "biorxiv", "consensus", "clinicaltrials", "..."],
       "manual_sources": ["hand-search of X reference lists", "..."]
+    },
+    "retrieval": {                       // optional; full-text retrieval config (SKILL.md step 5)
+      "proxy_base": "https://login.ezproxy.<inst>.edu/login?url=",  // institutional proxy prefix
+      "contact_email": "for Unpaywall/NCBI courtesy params and author requests",
+      "notes": "string"
     }
   },
   "search_runs": {
@@ -66,6 +71,13 @@ Do not confuse this with deduplication: `dedupe.py` removes literal duplicate *e
       "dedup_status": "unique | duplicate_of:<report_id>",
       "stage": "identified | screened | excluded | eligible_for_full_text | full_text_not_retrieved | full_text_excluded | included",
       "study_id": "set once this report is linked to a study (explicitly or by default at inclusion)",
+      "retrieval": {                     // optional; written by check_oa.py, see SKILL.md step 5
+        "checked_at": "ISO 8601 timestamp",
+        "is_oa": true,
+        "route": "oa | pmc | proxy | ill | author | none",  // how full text was (or wasn't) obtained
+        "url": "best free full-text url or null",
+        "host": "publisher | repository | null"
+      },
       "screening_decisions": [
         {
           "decision": "include | exclude | maybe",
