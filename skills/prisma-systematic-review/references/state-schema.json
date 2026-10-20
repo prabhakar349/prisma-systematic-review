@@ -68,6 +68,16 @@
             "sources": { "type": "array", "items": { "type": "string" } },
             "manual_sources": { "type": "array", "items": { "type": "string" } }
           }
+        },
+        "retrieval": {
+          "description": "Optional full-text retrieval config (see SKILL.md step 5).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "proxy_base": { "type": "string" },
+            "contact_email": { "type": "string" },
+            "notes": { "type": "string" }
+          }
         }
       }
     },
@@ -126,6 +136,18 @@
                      "full_text_not_retrieved", "full_text_excluded", "included"]
           },
           "study_id": { "type": "string" },
+          "retrieval": {
+            "description": "How/whether full text was obtained (written by check_oa.py; see SKILL.md step 5).",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "checked_at": { "type": "string", "format": "date-time" },
+              "is_oa": { "type": "boolean" },
+              "route": { "type": "string", "enum": ["oa", "pmc", "proxy", "ill", "author", "none"] },
+              "url": { "type": ["string", "null"] },
+              "host": { "type": ["string", "null"] }
+            }
+          },
           "screening_decisions": { "type": "array", "items": { "$ref": "#/definitions/decisionEvent" } },
           "eligibility_decisions": { "type": "array", "items": { "$ref": "#/definitions/decisionEvent" } }
         }

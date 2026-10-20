@@ -18,6 +18,22 @@ Two things are non-negotiable about how this file gets mutated, because they're 
 
 See `references/state-schema.md` for the full schema, including why `reports` and `studies` are separate concepts (short version: one study can have several reports — a registry entry, a conference abstract, a journal article — and conflating them overcounts "studies included"). Read the existing state file before writing to it — most steps below are incremental updates, not fresh writes.
 
+## Run it cheaply (this is a design constraint, not an afterthought)
+
+A systematic review is bulk work — hundreds of abstracts, dozens of full texts — so the naive approach (read every paper into the orchestrating model's context) is both the slowest and by far the most expensive way to run it. The whole pipeline is built so that **text is handled by scripts and cheap subagents; the expensive orchestrating model only sees distilled results and makes judgment calls.** Hold to these rules and a review costs a fraction of the naive version:
+
+- **Never pull bulk literature into the orchestrator's context.** Ingest records with `scripts/ingest_pubmed.py` (writes abstracts straight to the state file, never to the conversation). Compress full texts with `scripts/digest_fulltext.py` before anyone reads them. If you catch yourself about to read raw abstracts or full papers into context to "look them over," stop — that is the costly path this skill exists to avoid.
+- **Match the model to the task:**
+
+  | Work | Who does it |
+  |---|---|
+  | Deterministic / countable (dedupe, flow diagram, checklist, ingest, digest, OA lookup) | a **script** — no model tokens at all |
+  | High-volume judgment (title/abstract screening, data extraction) | a **subagent** on a cheaper model — `prisma-abstract-screener` and `prisma-data-extractor` both default to `sonnet` and write to a file |
+  | Protocol design, resolving `maybe`s, synthesis, final checklist narrative | the **orchestrator** (the strongest model) — but only on distilled inputs |
+
+- **Subagents keep file-reading off your context.** A screener or extractor agent reads the batch and returns only its JSON verdicts/records; the papers it read never enter the orchestrator's context. Dispatch them in parallel chunks. You (orchestrator) validate and apply their output — see steps 4 and 6.
+- **Lean on the state file as memory, and commit per phase.** Because every decision lives in `prisma-state.json` and git, a long review can `/clear` the conversation between phases and resume cold by reading the state file — you never need to keep the whole transcript live. Run the flow-diagram script (read-only) to re-orient instead of re-reading history.
+
 ## The workflow
 
 Work through these phases in order, but treat this as resumable — a real review spans weeks. Always check whether `prisma-state.json` already exists and what phase it's at before assuming you're starting fresh.
@@ -38,7 +54,11 @@ Write this into `prisma-state.json` under `protocol` with `version: 1` and `stat
 
 For each confirmed source, run the search and record a `search_runs` entry first — `source`, `query` (the exact string used; PRISMA item #7 requires this be reproducible by someone else), `searched_at`, and `result_count`. As results come back, append each one to `reports` with `source`, `source_id`, `identifiers` (DOI/PMID/PMCID/NCT as available), `title`, `authors`, `year`, `abstract`, `search_run_id` pointing back at the run, and `stage: "identified"` (this is the one and only place you set `stage` by hand — from here on it's derived automatically, see the note at the end of step 7).
 
+For PubMed specifically, do **not** ingest through the MCP search tool (its payload lands in your context and is expensive at scale). Record the `search_runs` entry with its exact `query`, then run `scripts/ingest_pubmed.py prisma-state.json` — it executes the query over NCBI E-utilities and writes every record straight into `reports` as `identified`, abstracts included, without any of it touching the conversation. It is idempotent, so re-running after an interruption is safe. (See "Run it cheaply" above.)
+
 For non-tool-accessible sources (register browsing, citation searching, hand-searching reference lists), still create a `search_runs` entry (`source: "manual"`, a `method` string, and the count the user gives you) rather than a tool-driven one — don't fabricate a search you didn't run, but do record that it happened.
+
+Adding a source that isn't built in follows one contract — see "Adding a new source" below; the shape it writes (`search_runs` + `reports`) is always the same, so the rest of the pipeline doesn't care where a report came from.
 
 ### 3. Deduplication
 
@@ -56,11 +76,25 @@ Treat every agent decision as provisional, not final: this accelerates a human r
 
 For every report that survived screening (current screening decision is `include` or `maybe`), note whether the full text was retrievable — append an eligibility decision event with `full_text_retrieved: false` for the ones that weren't (this is its own PRISMA-tracked number, not silently dropped). For retrieved texts, assess against the same criteria at full-text depth and append an eligibility decision with a reason. Keep this stage's `reason_category` vocabulary distinct from the screening stage's — PRISMA reports them separately because full-text exclusions are typically more specific (e.g., "wrong outcome measure" vs. a title/abstract-stage "wrong population").
 
+**Retrieving the full texts — a legal ladder, cheapest first.** Most reviews hit paywalls here. Work down this ladder and record how each report was obtained in `reports.<id>.retrieval` (see the schema), so "not retrieved" is a documented decision, never a silent gap:
+
+1. **PMC / open repositories** — the MCP `get_full_text_article` tool returns full text for anything in PubMed Central. Free and scriptable.
+2. **Unpaywall OA** — run `scripts/check_oa.py prisma-state.json`. It queries Unpaywall (the standard *legal* OA index) for every still-unretrieved include/maybe report and records a free full-text URL where one exists. Fetch those.
+3. **Institutional access** — if the user has a university/hospital affiliation, their library proxy or VPN unlocks most of the rest. Store the proxy base in `protocol.retrieval.proxy_base` (e.g. `https://login.ezproxy.<inst>.edu/login?url=`) and, with the user driving their own authenticated browser, open each article through it; distil the page with `scripts/digest_fulltext.py` rather than reading it into context.
+4. **Interlibrary loan / author request** — for the handful of pivotal papers still missing, the user's library ILL or a polite email to the corresponding author will get a PDF. Slow; reserve for studies likely to move the synthesis.
+5. **Document as not retrieved** — anything still unobtained gets an eligibility event with `full_text_retrieved: false`. PRISMA explicitly expects this number; a review is finalizable on what was retrieved, with the remainder honestly reported.
+
+**Never route around a paywall through unauthorized sources** (Sci-Hub and the like) — the skill does not do this and will not suggest it. The ladder above is the complete sanctioned set.
+
 ### 6. Data extraction
 
 **6a. Link reports into studies first.** If any included reports are different publications of the same underlying trial (a registry entry plus its eventual journal article, a conference abstract plus the full publication), run `scripts/link_study.py prisma-state.json --reports <id1> <id2> ...` to group them — ask the user if you're not sure two reports are the same study, don't guess. An included report with no explicit link is treated as its own single-report study by default, which is correct for the common case.
 
-**6b. Extract.** For every included study (not report — extract once per study, on its primary report unless the user needs per-report detail), capture the structured fields the synthesis needs — ask, don't assume a fixed schema beyond the PRISMA-required basics of design, population, sample size, and outcome data. Store it under `studies.<study_id>.extraction`. If the user wants risk-of-bias assessment (PRISMA item #18), record that under `studies.<study_id>.risk_of_bias` — the instrument (Cochrane RoB 2, ROBINS-I, etc.) is the user's judgment call, not yours.
+**6b. Extract.** For every included study (not report — extract once per study, on its primary report unless the user needs per-report detail), capture the structured fields the synthesis needs — ask, don't assume a fixed schema beyond the PRISMA-required basics of design, population, sample size, and outcome data. Agree the extraction schema with the user first (field name + one-line meaning each), since it must be consistent across every study.
+
+Like screening, extraction is high-volume full-text reading, so **delegate it** rather than reading papers into your own context (see "Run it cheaply"). First compress each full text with `scripts/digest_fulltext.py` (pass a small `--lexicon` of the review's domain terms if you have one). Then dispatch the **`prisma-data-extractor`** agent (see `agents/prisma-data-extractor.md`, model `sonnet`) in batches, handing it the agreed schema and the file paths to the full texts/digests; it returns one JSON record per study and **never writes to `prisma-state.json`**. You validate its output, then apply it with `scripts/apply_extraction.py prisma-state.json batch.json` — that script appends the eligibility decisions, runs the flow-diagram `--update-state` to assign study_ids, and attaches each `extraction` to `studies.<study_id>.extraction`. Run `validate_state.py` after. For a small set, or when the user extracts personally, do it inline instead.
+
+If the user wants risk-of-bias assessment (PRISMA item #18), record that under `studies.<study_id>.risk_of_bias` — the instrument (Cochrane RoB 2, ROBINS-I, etc.) is the user's judgment call, not yours.
 
 ### 7. Flow diagram and checklist
 
@@ -85,3 +119,18 @@ This walks the 27-item checklist (`references/prisma-2020-checklist.md` has the 
 ## Updating an existing review, not just starting one
 
 If `prisma-state.json` already has reports, the user is far more likely to be resuming than restarting. Run the flow-diagram script (it's read-only without `--update-state`) to see current counts and pending totals, summarize that back to them ("You've screened 340 of 512 reports; 38 are in eligibility review"), and pick up there rather than re-running earlier phases.
+
+## Adding a new source
+
+The pipeline is source-agnostic: every phase after identification reads `reports` and never cares where a report came from. So adding a source Claude Code isn't already wired for (Embase, Scopus, Web of Science, a CSV export from a librarian, a hand search) is always the same contract — produce these two shapes and nothing downstream changes:
+
+1. **One `search_runs` entry per search**, with `source` (a short stable name for the source), the exact `query` or a `method` string for a manual search, `searched_at`, and `result_count`. This is what makes the search reproducible for PRISMA item #7.
+2. **One `reports` entry per record**, with `source`, `source_id`, `identifiers` (whatever of DOI/PMID/PMCID/NCT exist), `title`, `authors`, `year`, `abstract`, `search_run_id` back-pointing at the run, and `stage: "identified"`.
+
+`scripts/ingest_pubmed.py` is the reference implementation of this contract for PubMed. To add a source:
+
+- **Has a scriptable API** (bioRxiv, an institutional export endpoint)? Write a small ingest script modelled on `ingest_pubmed.py` — fetch, map each record to the `reports` shape, append, keep abstracts out of context. Idempotent on the source's ID.
+- **Only an MCP tool** (Consensus, ClinicalTrials.gov)? Call it, then write the returned records into `reports` in the same shape. Watch the volume — if it returns large payloads, prefer a script or save-to-file path.
+- **Only a file** (a `.ris`/`.csv`/`.nbib` export, a reference-list hand search)? Parse the file into `reports`; record a `manual` or named-source `search_runs` entry with the count. Don't invent a query you didn't run.
+
+Whatever the source, dedupe (step 3) runs across all of them afterward on identifiers — so the same paper found in PubMed and Embase collapses to one report automatically.
