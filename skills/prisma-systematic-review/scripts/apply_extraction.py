@@ -25,7 +25,12 @@ It runs generate_flow_diagram.py --update-state itself to recompute stages and
 assign single-report study_ids, then attaches extractions. Always run
 validate_state.py afterward.
 """
-import argparse, datetime, json, os, subprocess, sys
+import argparse
+import datetime
+import json
+import os
+import subprocess
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 

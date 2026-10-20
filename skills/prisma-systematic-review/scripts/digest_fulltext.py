@@ -24,7 +24,10 @@ With no lexicon it falls back to generic systematic-review cues (sample size,
 enrollment, p-values, effect sizes) and reports no entities — fine for a quick
 look, but a real review should supply its own `entities`/`outcome` terms.
 """
-import argparse, json, re, sys
+import argparse
+import json
+import re
+import sys
 
 # Generic fallbacks — intentionally domain-neutral.
 DEFAULT_OUTCOME = [r"\boutcome", r"\bprimary endpoint", r"\bsecondary endpoint",

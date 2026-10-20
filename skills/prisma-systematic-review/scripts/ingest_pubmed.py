@@ -19,7 +19,13 @@ Why this is a script and not an MCP call: the MCP full-text/search tools return
 their payload into the model context, which is both slow and expensive at scale.
 E-utilities over plain HTTP keeps the abstracts out of context entirely.
 """
-import argparse, json, os, sys, time, urllib.parse, urllib.request
+import argparse
+import json
+import os
+import sys
+import time
+import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ET
 
 EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -50,8 +56,10 @@ def efetch(pmids, tool):
         root = ET.fromstring(get(f"{EUTILS}/efetch.fcgi?{q}"))
         for art in root.findall("./PubmedArticle"):
             cite = art.find("./MedlineCitation")
-            article = cite.find("./Article")
-            pmid = cite.findtext("./PMID")
+            article = cite.find("./Article") if cite is not None else None
+            pmid = cite.findtext("./PMID") if cite is not None else None
+            if cite is None or article is None or not pmid:
+                continue
             at = article.find("./ArticleTitle")
             title = "".join(at.itertext()) if at is not None else ""
             parts = []
@@ -111,7 +119,8 @@ def main():
         sys.exit("No pubmed search_runs to execute. Record a run with a `query` "
                  "first (SKILL.md step 2), or pass --run RUN_ID.")
 
-    pmid_run, counts = {}, {}
+    pmid_run: dict[str, str] = {}
+    counts: dict[str, tuple[int, int]] = {}
     for run_id in targets:
         run = runs.get(run_id)
         if not run or not run.get("query"):

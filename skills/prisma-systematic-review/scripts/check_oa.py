@@ -23,17 +23,21 @@ that already have a retrieval record.
 Usage:
     check_oa.py STATE [--email you@example.org] [--recheck]
 """
-import argparse, datetime, json, os, time, urllib.parse, urllib.request
+import argparse
+import datetime
+import json
+import os
+import time
+import urllib.parse
+import urllib.request
 
 
 def get(url):
-    last = None
     for _ in range(3):
         try:
             with urllib.request.urlopen(url, timeout=45) as r:
                 return r.read()
-        except Exception as e:
-            last = e
+        except Exception:
             time.sleep(1.5)
     return None
 
